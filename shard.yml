@@ -1,0 +1,7 @@
+name: codex-bridge
+version: 0.1.0
+description: Product-neutral delivery to local Codex Desktop tasks
+authors:
+  - Mike Owens
+license: MIT
+crystal: ">= 1.21.0, < 2.0.0"
