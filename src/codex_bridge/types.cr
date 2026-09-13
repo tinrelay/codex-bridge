@@ -40,7 +40,20 @@ module CodexBridge
   record Ambiguous, reason : String
   record Incompatible, reason : String
 
-  alias Result = Accepted | Retryable | Ambiguous | Incompatible
+  struct Ready
+  end
+
+  enum TerminalStatus
+    Completed
+    Failed
+    Interrupted
+  end
+
+  record Terminal, turn_id : String, status : TerminalStatus
+
+  alias DeliveryResult = Accepted | Retryable | Ambiguous | Incompatible
+  alias ReadinessResult = Ready | Retryable | Incompatible
+  alias ObservationResult = Terminal | Retryable | Incompatible
 
   class Control
     getter stopped = false

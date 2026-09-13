@@ -20,6 +20,7 @@ module CodexBridgeSpec
     property on_start : Proc(Connection, JSON::Any, Nil)? = nil
     property on_steer : Proc(Connection, JSON::Any, Nil)? = nil
     property on_history : Proc(Connection, JSON::Any, Nil)? = nil
+    property on_subscribe : Proc(Connection, Nil)? = nil
 
     def initialize(root : String)
       @path = File.join(root, "ipc", "ipc.sock")
@@ -71,6 +72,16 @@ module CodexBridgeSpec
       entities[turn_id].as_h["status"] = JSON::Any.new("completed")
       self.runtime = "idle"
       self.revision += 1
+      stream
+    end
+
+    def finish_while_another_turn_is_active(
+      turn_id : String,
+      active_id : String,
+      status = "completed",
+    )
+      entities[turn_id].as_h["status"] = JSON::Any.new(status)
+      add_turn(active_id)
       stream
     end
 
@@ -195,7 +206,10 @@ module CodexBridgeSpec
         when "thread-owner-discovery"
           reply(connection, request, {supportsUntrustedAppInput: true})
         when "thread-stream-following-changed"
-          stream(connection) if request["params"]["following"].as_bool
+          if request["params"]["following"].as_bool
+            callback = on_subscribe
+            callback ? callback.call(connection) : stream(connection)
+          end
         when "thread-follower-load-complete-history"
           if callback = on_history
             callback.call(connection, request)

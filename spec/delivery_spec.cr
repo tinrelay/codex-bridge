@@ -1,10 +1,39 @@
 require "./spec_helper"
 
 describe CodexBridge::Client do
+  it "checks a compatible idle or active task without submitting" do
+    ["idle", "active"].each do |runtime|
+      CodexBridgeSpec.with_peer do |peer, root|
+        peer.add_turn("active-turn") if runtime == "active"
+
+        result = CodexBridge::Client.new(root).check(CodexBridgeSpec::TASK)
+
+        result.should eq(CodexBridge::Ready.new)
+        peer.starts.should be_empty
+        peer.steers.should be_empty
+      end
+    end
+  end
+
+  it "classifies unavailable and incompatible readiness without submitting" do
+    missing = File.join(Dir.tempdir, "cb-none-#{Process.pid}")
+    result = CodexBridge::Client.new(missing).check(CodexBridgeSpec::TASK)
+    result.should eq(CodexBridge::Retryable.new("codex_transport_unavailable"))
+
+    CodexBridgeSpec.with_peer do |peer, root|
+      peer.runtime = "unknown"
+      result = CodexBridge::Client.new(root).check(CodexBridgeSpec::TASK)
+
+      result.should eq(CodexBridge::Incompatible.new("unknown_task_runtime"))
+      peer.starts.should be_empty
+      peer.steers.should be_empty
+    end
+  end
+
   it "queues untrusted attachments until idle, then starts one fresh turn" do
     CodexBridgeSpec.with_peer do |peer, root|
       peer.add_turn("active-turn")
-      result = Channel(CodexBridge::Result).new(1)
+      result = Channel(CodexBridge::DeliveryResult).new(1)
       spawn do
         result.send(CodexBridge::Client.new(root).deliver(
           CodexBridgeSpec.delivery(CodexBridge::DeliveryMode::Queue)
@@ -232,7 +261,7 @@ describe CodexBridge::Client do
         received.send(nil)
       end
       control = CodexBridge::Control.new
-      result = Channel(CodexBridge::Result).new(1)
+      result = Channel(CodexBridge::DeliveryResult).new(1)
       spawn do
         result.send(CodexBridge::Client.new(root, control).deliver(
           CodexBridgeSpec.delivery(CodexBridge::DeliveryMode::Queue)
@@ -258,6 +287,78 @@ describe CodexBridge::Client do
       )
 
       result.should eq(CodexBridge::Incompatible.new("duplicate_logical_message_id"))
+      peer.starts.should be_empty
+      peer.steers.should be_empty
+    end
+  end
+
+  it "observes each terminal status without waiting for the task to become idle" do
+    {
+      "completed"   => CodexBridge::TerminalStatus::Completed,
+      "failed"      => CodexBridge::TerminalStatus::Failed,
+      "interrupted" => CodexBridge::TerminalStatus::Interrupted,
+    }.each do |raw_status, expected_status|
+      CodexBridgeSpec.with_peer do |peer, root|
+        peer.add_turn("observed-turn")
+        result = Channel(CodexBridge::ObservationResult).new(1)
+        spawn do
+          result.send(
+            CodexBridge::Client.new(root).observe_until_terminal(
+              CodexBridgeSpec::TASK,
+              "observed-turn"
+            )
+          )
+        end
+        CodexBridgeSpec.eventually { peer.connections.size >= 1 }
+
+        peer.finish_while_another_turn_is_active("observed-turn", "other-turn", raw_status)
+
+        result.receive.should eq(CodexBridge::Terminal.new("observed-turn", expected_status))
+        peer.runtime.should eq("active")
+        peer.starts.should be_empty
+        peer.steers.should be_empty
+      end
+    end
+  end
+
+  it "loads complete history before observing a terminal turn after restart" do
+    CodexBridgeSpec.with_peer do |peer, root|
+      peer.add_turn("historical-turn", "completed")
+      complete_state = JSON.parse(peer.state.to_json)
+      peer.state = JSON.parse({
+        threadRuntimeStatus: {type: "idle"},
+        turnHistory:         {
+          kind:    "canonical",
+          history: {entitiesByKey: {} of String => String},
+        },
+      }.to_json)
+      peer.on_history = ->(connection : CodexBridgeSpec::Connection, request : JSON::Any) do
+        peer.state = complete_state
+        peer.revision += 1
+        peer.reply(connection, request, {revision: peer.revision})
+        peer.stream(connection)
+      end
+
+      result = CodexBridge::Client.new(root).observe_until_terminal(
+        CodexBridgeSpec::TASK,
+        "historical-turn"
+      )
+
+      result.should eq(CodexBridge::Terminal.new(
+        "historical-turn",
+        CodexBridge::TerminalStatus::Completed
+      ))
+    end
+  end
+
+  it "returns retryable when complete history has not observed the accepted turn" do
+    CodexBridgeSpec.with_peer do |peer, root|
+      result = CodexBridge::Client.new(root).observe_until_terminal(
+        CodexBridgeSpec::TASK,
+        "accepted-but-lagging"
+      )
+
+      result.should eq(CodexBridge::Retryable.new("accepted_turn_not_observed"))
       peer.starts.should be_empty
       peer.steers.should be_empty
     end

@@ -6,7 +6,7 @@ module CodexBridge
     )
     end
 
-    def deliver(delivery : Delivery) : Result
+    def deliver(delivery : Delivery) : DeliveryResult
       session = connect(delivery.task_id)
       session.subscribe
       message = Message.new(delivery)
@@ -57,7 +57,41 @@ module CodexBridge
       session.try(&.close)
     end
 
-    private def reconcile_unknown(delivery) : Result
+    def check(task_id : String) : ReadinessResult
+      validate_task_id(task_id)
+      session = connect(task_id)
+      session.subscribe
+      session.validate_available
+      Ready.new
+    rescue ex : RetryableFailure | Disconnected
+      Retryable.new(ex.message || "delivery_unavailable")
+    rescue ex : IncompatibleFailure
+      Incompatible.new(ex.message || "desktop_incompatible")
+    rescue Stopped
+      Retryable.new("stopped")
+    ensure
+      session.try(&.close)
+    end
+
+    def observe_until_terminal(task_id : String, turn_id : String) : ObservationResult
+      validate_task_id(task_id)
+      raise ArgumentError.new("invalid turn id") if turn_id.empty?
+      session = connect(task_id)
+      session.subscribe
+      session.load_complete_history
+      status = session.observe_until_terminal(turn_id)
+      Terminal.new(turn_id, status)
+    rescue ex : RetryableFailure | Disconnected
+      Retryable.new(ex.message || "delivery_unavailable")
+    rescue ex : IncompatibleFailure
+      Incompatible.new(ex.message || "desktop_incompatible")
+    rescue Stopped
+      Retryable.new("stopped")
+    ensure
+      session.try(&.close)
+    end
+
+    private def reconcile_unknown(delivery) : DeliveryResult
       session = connect(delivery.task_id)
       session.subscribe
       match = session.load_complete_history(delivery.logical_message_id)
@@ -85,6 +119,12 @@ module CodexBridge
       Session.new(socket, task_id, @control)
     rescue IO::Error
       raise RetryableFailure.new("codex_transport_unavailable")
+    end
+
+    private def validate_task_id(task_id)
+      unless /\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/.matches?(task_id)
+        raise ArgumentError.new("invalid local task id")
+      end
     end
 
     private def open_socket : CodexTransport

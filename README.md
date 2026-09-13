@@ -63,6 +63,11 @@ retry state, task mappings, or completion state; the caller owns those policies 
 input needed after an ambiguous result. Unknown submission outcomes are never resubmitted
 automatically.
 
+`Client#check` returns `Ready`, `Retryable`, or `Incompatible` without submitting input. After
+`Accepted`, `Client#observe_until_terminal` returns the exact turn's closed terminal status,
+`Retryable`, or `Incompatible`. It does not wait for the task to become idle and does not choose
+whether another delivery should follow.
+
 Run the checks with:
 
 ```sh

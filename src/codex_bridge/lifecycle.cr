@@ -50,6 +50,15 @@ module CodexBridge
       current_turn.try { |turn| turn.as_h["turnId"]?.try(&.as_s?) }
     end
 
+    def turn_status(id : String) : String?
+      return if revision.nil?
+      turn = turns.find { |candidate| candidate.as_h["turnId"]?.try(&.as_s?) == id }
+      return unless turn
+      status = turn.as_h["status"]?.try(&.as_s?)
+      raise IncompatibleFailure.new("invalid_turn_status") unless status && !status.empty?
+      status
+    end
+
     def message_match(logical_id : String) : MessageMatch
       return MessageMatch.new(MessageState::Absent) if revision.nil?
       matches = [] of String?

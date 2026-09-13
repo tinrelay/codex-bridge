@@ -57,6 +57,11 @@ module CodexBridge
     end
 
     def load_complete_history(logical_id : String) : MessageMatch
+      load_complete_history
+      lifecycle.message_match(logical_id)
+    end
+
+    def load_complete_history
       deadline = Time.instant + REQUEST_TIMEOUT
       response = rpc(
         COMPLETE_HISTORY_METHOD,
@@ -79,7 +84,6 @@ module CodexBridge
           raise IncompatibleFailure.new("complete_history_revision_mismatch")
         end
       end
-      lifecycle.message_match(logical_id)
     rescue TypeCastError | KeyError
       raise IncompatibleFailure.new("invalid_complete_history_response")
     rescue Deadline
@@ -113,6 +117,39 @@ module CodexBridge
         end
       else
         raise IncompatibleFailure.new("unknown_task_runtime")
+      end
+    end
+
+    def validate_available
+      refreshed_unknown = false
+      loop do
+        @control.check
+        refresh if lifecycle.revision.nil?
+        return if {"active", "idle"}.includes?(lifecycle.runtime)
+        raise IncompatibleFailure.new("unknown_task_runtime") if refreshed_unknown
+        refresh
+        refreshed_unknown = true
+      end
+    end
+
+    def observe_until_terminal(id : String) : TerminalStatus
+      loop do
+        @control.check
+        refresh if lifecycle.revision.nil?
+        case lifecycle.turn_status(id)
+        when "completed"
+          return TerminalStatus::Completed
+        when "failed"
+          return TerminalStatus::Failed
+        when "interrupted"
+          return TerminalStatus::Interrupted
+        when "inProgress"
+          receive
+        when nil
+          raise RetryableFailure.new("accepted_turn_not_observed")
+        else
+          raise IncompatibleFailure.new("unknown_turn_status")
+        end
       end
     end
 
