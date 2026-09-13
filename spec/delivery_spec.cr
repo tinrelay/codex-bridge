@@ -363,4 +363,23 @@ describe CodexBridge::Client do
       peer.steers.should be_empty
     end
   end
+
+  it "reconciles one logical ID without submitting or inferring from absence" do
+    CodexBridgeSpec.with_peer do |peer, root|
+      peer.add_turn("observed-turn", "completed")
+      peer.add_user_message("observed-turn", "observed-id")
+      peer.add_provisional_message("provisional-id")
+      client = CodexBridge::Client.new(root)
+
+      observed = client.reconcile(CodexBridgeSpec::TASK, "observed-id")
+      provisional = client.reconcile(CodexBridgeSpec::TASK, "provisional-id")
+      absent = client.reconcile(CodexBridgeSpec::TASK, "absent-id")
+
+      observed.should eq(CodexBridge::LogicalMessageObserved.new("observed-turn"))
+      provisional.should eq(CodexBridge::LogicalMessageProvisional.new)
+      absent.should eq(CodexBridge::LogicalMessageNotObserved.new)
+      peer.starts.should be_empty
+      peer.steers.should be_empty
+    end
+  end
 end

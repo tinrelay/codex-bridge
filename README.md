@@ -68,6 +68,9 @@ automatically.
 `Retryable`, or `Incompatible`. It does not wait for the task to become idle and does not choose
 whether another delivery should follow.
 
+`Client#reconcile` reads complete history for one logical message ID without submitting or treating
+non-observation as rejection. Callers may use that evidence to reconstruct their own retry state.
+
 Run the checks with:
 
 ```sh

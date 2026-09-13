@@ -50,10 +50,19 @@ module CodexBridge
   end
 
   record Terminal, turn_id : String, status : TerminalStatus
+  record LogicalMessageObserved, turn_id : String
+
+  struct LogicalMessageProvisional
+  end
+
+  struct LogicalMessageNotObserved
+  end
 
   alias DeliveryResult = Accepted | Retryable | Ambiguous | Incompatible
   alias ReadinessResult = Ready | Retryable | Incompatible
   alias ObservationResult = Terminal | Retryable | Incompatible
+  alias ReconciliationResult = LogicalMessageObserved | LogicalMessageProvisional |
+                               LogicalMessageNotObserved | Retryable | Incompatible
 
   class Control
     getter stopped = false

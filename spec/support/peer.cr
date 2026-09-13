@@ -68,6 +68,14 @@ module CodexBridgeSpec
       self.revision += 1
     end
 
+    def add_provisional_message(logical_id : String)
+      entities["provisional"] = JSON.parse({
+        status: "inProgress",
+        items:  [{type: "userMessage", clientId: logical_id}],
+      }.to_json)
+      self.revision += 1
+    end
+
     def finish(turn_id : String)
       entities[turn_id].as_h["status"] = JSON::Any.new("completed")
       self.runtime = "idle"

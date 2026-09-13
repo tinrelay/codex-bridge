@@ -91,6 +91,32 @@ module CodexBridge
       session.try(&.close)
     end
 
+    def reconcile(task_id : String, logical_message_id : String) : ReconciliationResult
+      validate_task_id(task_id)
+      validate_logical_message_id(logical_message_id)
+      session = connect(task_id)
+      session.subscribe
+      match = session.load_complete_history(logical_message_id)
+      case match.state
+      when MessageState::Accepted
+        LogicalMessageObserved.new(match.turn_id.not_nil!)
+      when MessageState::Provisional
+        LogicalMessageProvisional.new
+      when MessageState::Absent
+        LogicalMessageNotObserved.new
+      else
+        raise IncompatibleFailure.new("unknown_message_state")
+      end
+    rescue ex : RetryableFailure | Disconnected
+      Retryable.new(ex.message || "delivery_unavailable")
+    rescue ex : IncompatibleFailure
+      Incompatible.new(ex.message || "desktop_incompatible")
+    rescue Stopped
+      Retryable.new("stopped")
+    ensure
+      session.try(&.close)
+    end
+
     private def reconcile_unknown(delivery) : DeliveryResult
       session = connect(delivery.task_id)
       session.subscribe
@@ -124,6 +150,12 @@ module CodexBridge
     private def validate_task_id(task_id)
       unless /\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/.matches?(task_id)
         raise ArgumentError.new("invalid local task id")
+      end
+    end
+
+    private def validate_logical_message_id(logical_message_id)
+      if logical_message_id.empty? || logical_message_id.bytesize > 160
+        raise ArgumentError.new("invalid logical message id")
       end
     end
 
