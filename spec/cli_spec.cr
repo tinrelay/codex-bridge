@@ -17,7 +17,7 @@ describe CodexBridge::CLI do
       status.should eq(0)
       output.to_s.should eq("sent #{CodexBridgeSpec::TASK}\n")
       error.to_s.should be_empty
-      CodexBridgeSpec.helper_requests(log).last["sourceTaskId"].as_s
+      CodexBridgeSpec.transport_requests(log).last["sourceTaskId"].as_s
         .should eq(CodexBridgeSpec::TASK)
     end
   end
@@ -33,7 +33,7 @@ describe CodexBridge::CLI do
       )
 
       status.should eq(0)
-      CodexBridgeSpec.helper_requests(log).last["sourceTaskId"].as_s
+      CodexBridgeSpec.transport_requests(log).last["sourceTaskId"].as_s
         .should eq(CodexBridgeSpec::SOURCE)
     end
   end
@@ -50,6 +50,7 @@ describe CodexBridge::CLI do
 
   it "prints all resolved discovery values as JSON" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
+      socket_file = ENV["CODEX_APP_TOOLS_PIPE_PATH"]
       output = IO::Memory.new
       status = CodexBridge::CLI.run(
         ["--discover", "--codex-home", root],
@@ -60,13 +61,14 @@ describe CodexBridge::CLI do
 
       status.should eq(0)
       values = JSON.parse(output.to_s)
-      values["socket_file"].as_s.should eq("/fake/app-tools.sock")
+      values["socket_file"].as_s.should eq(socket_file)
       values["node_path"].as_s.should eq(File.join(root, "node"))
     end
   end
 
   it "prints one resolved discovery variable" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
+      socket_file = ENV["CODEX_APP_TOOLS_PIPE_PATH"]
       output = IO::Memory.new
       status = CodexBridge::CLI.run(
         ["--variable", "socket_file", "--codex-home", root],
@@ -76,7 +78,7 @@ describe CodexBridge::CLI do
       )
 
       status.should eq(0)
-      output.to_s.should eq("/fake/app-tools.sock\n")
+      output.to_s.should eq("#{socket_file}\n")
     end
   end
 

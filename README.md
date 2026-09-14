@@ -74,9 +74,10 @@ environment variables remain available for nonstandard installations.
 
 ## Stock Codex boundary
 
-Codex accepts app-tools pipe clients launched with its bundled Node runtime. codex-bridge uses that
-runtime to probe the per-user app-tools sockets with the read-only `tools/list` JSON-RPC method and
-selects the endpoint advertising `codex_app/send_message_to_thread`.
+Native Crystal IO is the normal transport. On Linux, codex-bridge speaks the length-prefixed
+JSON-RPC protocol directly over the per-user Unix sockets. It probes with the read-only `tools/list`
+method and selects the endpoint advertising `codex_app/send_message_to_thread`. macOS keeps its
+credential-sensitive bridge in one isolated adapter launched with Codex's bundled Node runtime.
 
 The last working socket path is stored in a small `kv` table in
 `~/.codex/codex-bridge/state.db`. Each call validates the cached endpoint first and scans again when

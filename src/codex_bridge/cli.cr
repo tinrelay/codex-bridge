@@ -13,7 +13,7 @@ module CodexBridge
           --codex-home PATH    Codex data directory (default: $CODEX_HOME or ~/.codex)
           --state-home PATH    codex-bridge state directory
           --socket-file PATH   Use this exact app-tools socket
-          --node-path PATH     Use this exact bundled Node executable
+          --node-path PATH     Bundled Node path (used by macOS transport)
           --codex-resources PATH
                                Codex resources directory containing cua_node
           --uncached           Do not read or write the socket cache
@@ -50,7 +50,9 @@ module CodexBridge
           state_home = path
         end
         options.on("--socket-file PATH", "Exact app-tools socket") { |path| socket_file = path }
-        options.on("--node-path PATH", "Exact bundled Node executable") { |path| node_path = path }
+        options.on("--node-path PATH", "Bundled Node path (used by macOS transport)") do |path|
+          node_path = path
+        end
         options.on("--codex-resources PATH", "Codex resources directory") do |path|
           codex_resources = path
         end
