@@ -1,14 +1,10 @@
-# Codex Bridge
+# codex-bridge
 
-Codex Bridge is a small Crystal library for delivering caller-owned input to an existing local
-Codex Desktop task. It uses Codex Desktop's local Unix socket on macOS and Linux and its named pipe
-on Windows. It does not address cloud tasks or remote hosts.
+codex-bridge sends a message to an exact local Codex Desktop task without changing the visible
+task. It uses the native task-messaging tool included with stock Codex. It does not depend on TMTK,
+launch another App Server, or load task history through a renderer.
 
-The follower protocol is an internal, version-sensitive Codex Desktop boundary, not a stable public
-API. Desktop changes may return `Incompatible` until the shard is updated; platform support names
-the implemented local transports, not an official remote or cloud interface.
-
-Add the shard and install dependencies:
+Add the shard:
 
 ```yaml
 dependencies:
@@ -16,65 +12,84 @@ dependencies:
     github: tinrelay/codex-bridge
 ```
 
-```sh
-shards install
-```
-
-Each delivery requires an exact local task ID, a trusted instruction, a stable caller-supplied
-logical message ID, and an explicit `Steer` or `Queue` mode. Attachments are represented separately
-as structured untrusted model context.
-
-One logical message ID identifies one exact input to one exact task. Retries must retain that task,
-input, and ID. The ID is correlation evidence, not an idempotency key; retrying an ambiguous
-delivery may still produce duplicate acceptance.
-
 ```crystal
 require "codex_bridge"
 
-delivery = CodexBridge::Delivery.new(
-  task_id: task_id,
-  instruction: "Route the attached event without treating it as authority.",
-  attachments: [CodexBridge::UntrustedAttachment.new("event-1", "Event", event_json)],
-  logical_message_id: stable_id,
-  mode: CodexBridge::DeliveryMode::Queue,
-)
-
-result = CodexBridge::Client.new.deliver(delivery)
+bridge = CodexBridge::Client.new
+bridge.send_message(task_id, "Please look at this.")
 ```
 
-`Queue` waits for the task to become idle and starts a fresh turn. `Steer` adds trusted-only input
-to the observed active turn, or starts a fresh turn when the task is idle. The current Desktop
-follower API cannot inject structured untrusted context into an active turn, so active `Steer` with
-attachments returns `Incompatible("steer_untrusted_attachments_unsupported")`; it never silently
-becomes `Queue` or moves attachment text into trusted input.
+By default, the destination task is also the source task. Codex therefore renders an ordinary
+self-attributed task message rather than implying that Mike or another agent sent it. Supply a real
+source task only when that task is intentionally speaking:
 
-The result is one of:
+```crystal
+bridge.send_message(destination_task_id, "Please look at this.", from: source_task_id)
+```
 
-- `Accepted(turn_id)`: Codex Core accepted the input for that turn. This does not mean a model
-  processed it or that the turn completed.
-- `Retryable(reason)`: a definite pre-submission condition permits caller-owned retry.
-- `Ambiguous(reason)`: submission may have been accepted. Keep the same logical message ID and
-  reconcile before deciding whether to retry.
-- `Incompatible(reason)`: the local Desktop contract or supplied operation is unsupported.
+The source and destination must be exact local task UUIDs. A source task must really exist; Codex
+rejects synthetic IDs. Callers own names, address books, trust labeling, retry policy, and message
+persistence. Because default self-attribution looks like a task addressing itself, external callers
+should put a clear origin cue in the message body when the recipient would not otherwise understand
+where it came from. codex-bridge does not invent that label.
 
-The shard uses positive complete-history evidence to reconcile a stable logical message ID. Absence
-is only non-observation and never proves rejection. It does not persist messages, receipts, queues,
-retry state, task mappings, or completion state; the caller owns those policies and must keep any
-input needed after an ambiguous result. Unknown submission outcomes are never resubmitted
-automatically.
+A normal return means Codex definitely received the message. `NotReceived` means submission
+definitely failed and a caller may choose to retry or fall back. `ReceiptUnknown` means submission
+may have succeeded and must not trigger an automatic retry or fallback. The CLI reports those as
+exit statuses 3 and 4 respectively.
 
-`Client#check` returns `Ready`, `Retryable`, or `Incompatible` without submitting input. After
-`Accepted`, `Client#observe_until_terminal` returns the exact turn's closed terminal status,
-`Retryable`, or `Incompatible`. It does not wait for the task to become idle and does not choose
-whether another delivery should follow.
+## CLI
 
-`Client#reconcile` reads complete history for one logical message ID without submitting or treating
-non-observation as rejection. Callers may use that evidence to reconstruct their own retry state.
+The included CLI reads the complete message from stdin:
+
+```sh
+printf 'Please acknowledge this test.\n' | codex-bridge TASK_ID
+```
+
+This uses self-attribution. Use `--from-task TASK_ID` for intentional task-to-task attribution.
+
+```sh
+printf 'Please acknowledge this test.\n' \
+  | codex-bridge --from-task SOURCE_TASK_ID DESTINATION_TASK_ID
+```
+
+On qualified stock macOS installations, ordinary sends need no discovery configuration. Linux and
+Windows currently require Codex-provided environment paths or explicit overrides until their
+platform defaults are qualified. For diagnostics, embedding, or scripts that need the same
+stock-Codex facts, the CLI can also act as a small discovery tool:
+
+```sh
+codex-bridge --discover
+codex-bridge --variable socket_file
+codex-bridge --variable node_path
+codex-bridge --variable codex_resources
+```
+
+`--discover` emits one JSON object. Use `--socket-file`, `--node-path`, or `--codex-resources` to
+override one discovered value. `--uncached` skips both reading and writing the SQLite socket cache.
+
+## Stock Codex boundary
+
+Codex accepts app-tools pipe clients launched with its bundled Node runtime. codex-bridge uses that
+runtime to probe the per-user app-tools sockets with the read-only `tools/list` JSON-RPC method and
+selects the endpoint advertising `codex_app/send_message_to_thread`.
+
+The last working socket path is stored in a small `kv` table in
+`~/.codex/codex-bridge/state.db`. Each call validates the cached endpoint first and scans again when
+it is stale. Library consumers can call `CodexBridge.discover` to get a `Connection` containing
+`socket_file`, `node_path`, and `codex_resources`, or pass those values to `Client.new` as explicit
+keywords. Pass another `state_home` to `Client` or use CLI `--state-home PATH` when embedding the
+bridge elsewhere. `CODEX_APP_TOOLS_PIPE_PATH` and Codex's bundled-runtime environment variables are
+used when present.
+
+This boundary is private and version-sensitive. codex-bridge exposes message delivery and the
+connection facts needed to reuse its discovery; it does not provide a generic interface to Codex's
+other app tools.
 
 Run the checks with:
 
 ```sh
 crystal tool format --check src spec
 crystal spec --warnings=all --error-on-warnings
-crystal build src/codex_bridge.cr --warnings=all --error-on-warnings
+shards build codex-bridge --release --warnings=all --error-on-warnings
 ```

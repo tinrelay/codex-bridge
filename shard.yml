@@ -5,3 +5,12 @@ authors:
   - Mike Owens
 license: MIT
 crystal: ">= 1.21.0, < 2.0.0"
+
+targets:
+  codex-bridge:
+    main: src/codex_bridge_cli.cr
+
+dependencies:
+  sqlite3:
+    github: crystal-lang/crystal-sqlite3
+    version: 0.23.0

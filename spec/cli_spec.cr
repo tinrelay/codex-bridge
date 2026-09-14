@@ -1,0 +1,111 @@
+require "./spec_helper"
+require "../src/codex_bridge/cli"
+
+describe CodexBridge::CLI do
+  it "sends stdin with self-attribution by default" do
+    CodexBridgeSpec.with_fake_app_tools do |root, log|
+      output = IO::Memory.new
+      error = IO::Memory.new
+      status = CodexBridge::CLI.run(
+        [CodexBridgeSpec::TASK],
+        IO::Memory.new("Hello"),
+        output,
+        error,
+        CodexBridge::Client.new(root)
+      )
+
+      status.should eq(0)
+      output.to_s.should eq("sent #{CodexBridgeSpec::TASK}\n")
+      error.to_s.should be_empty
+      CodexBridgeSpec.helper_requests(log).last["sourceTaskId"].as_s
+        .should eq(CodexBridgeSpec::TASK)
+    end
+  end
+
+  it "passes an explicit source task" do
+    CodexBridgeSpec.with_fake_app_tools do |root, log|
+      status = CodexBridge::CLI.run(
+        ["--from-task", CodexBridgeSpec::SOURCE, CodexBridgeSpec::TASK],
+        IO::Memory.new("Hello"),
+        IO::Memory.new,
+        IO::Memory.new,
+        CodexBridge::Client.new(root)
+      )
+
+      status.should eq(0)
+      CodexBridgeSpec.helper_requests(log).last["sourceTaskId"].as_s
+        .should eq(CodexBridgeSpec::SOURCE)
+    end
+  end
+
+  it "prints help without contacting Codex" do
+    output = IO::Memory.new
+    error = IO::Memory.new
+    status = CodexBridge::CLI.run(["--help"], IO::Memory.new, output, error)
+
+    status.should eq(0)
+    output.to_s.should contain("Usage: codex-bridge")
+    error.to_s.should be_empty
+  end
+
+  it "prints all resolved discovery values as JSON" do
+    CodexBridgeSpec.with_fake_app_tools do |root, _log|
+      output = IO::Memory.new
+      status = CodexBridge::CLI.run(
+        ["--discover", "--codex-home", root],
+        IO::Memory.new,
+        output,
+        IO::Memory.new
+      )
+
+      status.should eq(0)
+      values = JSON.parse(output.to_s)
+      values["socket_file"].as_s.should eq("/fake/app-tools.sock")
+      values["node_path"].as_s.should eq(File.join(root, "node"))
+    end
+  end
+
+  it "prints one resolved discovery variable" do
+    CodexBridgeSpec.with_fake_app_tools do |root, _log|
+      output = IO::Memory.new
+      status = CodexBridge::CLI.run(
+        ["--variable", "socket_file", "--codex-home", root],
+        IO::Memory.new,
+        output,
+        IO::Memory.new
+      )
+
+      status.should eq(0)
+      output.to_s.should eq("/fake/app-tools.sock\n")
+    end
+  end
+
+  it "distinguishes definite rejection from an unknown receipt" do
+    CodexBridgeSpec.with_fake_app_tools do |root, _log|
+      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "rejected"
+      rejected_error = IO::Memory.new
+      rejected = CodexBridge::CLI.run(
+        [CodexBridgeSpec::TASK],
+        IO::Memory.new("Hello"),
+        IO::Memory.new,
+        rejected_error,
+        CodexBridge::Client.new(root)
+      )
+
+      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "unknown"
+      unknown_error = IO::Memory.new
+      unknown = CodexBridge::CLI.run(
+        [CodexBridgeSpec::TASK],
+        IO::Memory.new("Hello"),
+        IO::Memory.new,
+        unknown_error,
+        CodexBridge::Client.new(root)
+      )
+
+      rejected.should eq(3)
+      rejected_error.to_s.should contain("not received")
+      unknown.should eq(4)
+      unknown_error.to_s.should contain("receipt unknown")
+    end
+  end
+end
