@@ -13,7 +13,7 @@ Add the shard and install dependencies:
 ```yaml
 dependencies:
   codex_bridge:
-    github: mieko/codex-bridge
+    github: tinrelay/codex-bridge
 ```
 
 ```sh
