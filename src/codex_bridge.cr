@@ -7,6 +7,7 @@ end
 
 require "./codex_bridge/types"
 require "./codex_bridge/state_store"
+require "./codex_bridge/platform_discovery"
 require "./codex_bridge/app_tools_endpoint"
 require "./codex_bridge/discovery"
 require "./codex_bridge/client"

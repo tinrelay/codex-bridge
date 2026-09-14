@@ -91,10 +91,9 @@ module CodexBridge
       if resources = ENV["CODEX_ELECTRON_RESOURCES_PATH"]?
         paths << {File.join(resources, "cua_node", "bin", node_name), resources}
       end
-      {% if flag?(:darwin) %}
-        resources = "/Applications/ChatGPT.app/Contents/Resources"
+      PlatformDiscovery.resource_candidates.each do |resources|
         paths << {File.join(resources, "cua_node", "bin", node_name), resources}
-      {% end %}
+      end
       paths.find { |path, _| File::Info.executable?(path) } || {nil, nil}
     end
 
@@ -114,11 +113,7 @@ module CodexBridge
     end
 
     private def self.default_candidates
-      {% if flag?(:win32) %}
-        [] of String
-      {% else %}
-        Dir.glob("/tmp/codex-browser-use/*.sock")
-      {% end %}
+      PlatformDiscovery.socket_candidates
     end
   end
 

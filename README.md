@@ -53,10 +53,10 @@ printf 'Please acknowledge this test.\n' \
   | codex-bridge --from-task SOURCE_TASK_ID DESTINATION_TASK_ID
 ```
 
-On qualified stock macOS installations, ordinary sends need no discovery configuration. Linux and
-Windows currently require Codex-provided environment paths or explicit overrides until their
-platform defaults are qualified. For diagnostics, embedding, or scripts that need the same
-stock-Codex facts, the CLI can also act as a small discovery tool:
+On qualified stock macOS app bundles and Linux DEB installations, ordinary sends need no discovery
+configuration. Windows currently requires Codex-provided environment paths or explicit overrides
+until its platform defaults are qualified. For diagnostics, embedding, or scripts that need the
+same stock-Codex facts, the CLI can also act as a small discovery tool:
 
 ```sh
 codex-bridge --discover
@@ -67,6 +67,10 @@ codex-bridge --variable codex_resources
 
 `--discover` emits one JSON object. Use `--socket-file`, `--node-path`, or `--codex-resources` to
 override one discovered value. `--uncached` skips both reading and writing the SQLite socket cache.
+
+The Linux default derives the bundled runtime from `/usr/lib/chatgpt/resources` and scans the
+per-user app-tools sockets under the system temporary directory. Explicit arguments and the Codex
+environment variables remain available for nonstandard installations.
 
 ## Stock Codex boundary
 
