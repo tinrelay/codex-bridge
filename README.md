@@ -53,10 +53,9 @@ printf 'Please acknowledge this test.\n' \
   | codex-bridge --from-task SOURCE_TASK_ID DESTINATION_TASK_ID
 ```
 
-On qualified stock macOS app bundles and Linux DEB installations, ordinary sends need no discovery
-configuration. Windows currently requires Codex-provided environment paths or explicit overrides
-until its platform defaults are qualified. For diagnostics, embedding, or scripts that need the
-same stock-Codex facts, the CLI can also act as a small discovery tool:
+On qualified stock macOS app bundles, Linux DEB installations, and Windows MSIX installations,
+ordinary sends need no discovery configuration. For diagnostics, embedding, or scripts that need
+the same stock-Codex facts, the CLI can also act as a small discovery tool:
 
 ```sh
 codex-bridge --discover
@@ -72,12 +71,17 @@ The Linux default derives the bundled runtime from `/usr/lib/chatgpt/resources` 
 per-user app-tools sockets under the system temporary directory. Explicit arguments and the Codex
 environment variables remain available for nonstandard installations.
 
+The Windows default resolves the current `OpenAI.Codex` AppX package, derives its bundled runtime,
+and scans the current user's `codex-browser-use-*` named pipes. Package versions and pipe names are
+discovered at runtime rather than embedded in the bridge.
+
 ## Stock Codex boundary
 
-Native Crystal IO is the normal transport. On Linux, codex-bridge speaks the length-prefixed
-JSON-RPC protocol directly over the per-user Unix sockets. It probes with the read-only `tools/list`
-method and selects the endpoint advertising `codex_app/send_message_to_thread`. macOS keeps its
-credential-sensitive bridge in one isolated adapter launched with Codex's bundled Node runtime.
+Native Crystal IO is the normal transport. On Linux and Windows, codex-bridge speaks the
+length-prefixed JSON-RPC protocol directly over the per-user Unix socket or named pipe. It probes
+with the read-only `tools/list` method and selects the endpoint advertising
+`codex_app/send_message_to_thread`. macOS keeps its credential-sensitive bridge in one isolated
+adapter launched with Codex's bundled Node runtime.
 
 The last working socket path is stored in a small `kv` table in
 `~/.codex/codex-bridge/state.db`. Each call validates the cached endpoint first and scans again when

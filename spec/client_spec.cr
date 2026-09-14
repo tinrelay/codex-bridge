@@ -53,7 +53,7 @@ describe CodexBridge::Client do
 
   it "reports an authoritative native rejection as not received" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
-      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "rejected"
+      CodexBridgeSpec.fake_result("rejected")
 
       expect_raises(CodexBridge::MessageRejected, "native rejection") do
         CodexBridge::Client.new(root).send_message(CodexBridgeSpec::TASK, "Hello")
@@ -63,7 +63,7 @@ describe CodexBridge::Client do
 
   it "reports an uncertain transport result as receipt unknown" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
-      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "unknown"
+      CodexBridgeSpec.fake_result("unknown")
 
       expect_raises(CodexBridge::ReceiptUnknown, "connection closed") do
         CodexBridge::Client.new(root).send_message(CodexBridgeSpec::TASK, "Hello")
@@ -73,7 +73,7 @@ describe CodexBridge::Client do
 
   it "reports malformed post-submission transport output as receipt unknown" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
-      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "malformed"
+      CodexBridgeSpec.fake_result("malformed")
 
       expect_raises(CodexBridge::ReceiptUnknown, "invalid_app_tools_response") do
         CodexBridge::Client.new(root).send_message(CodexBridgeSpec::TASK, "Hello")

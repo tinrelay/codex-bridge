@@ -14,51 +14,94 @@ module CodexBridgeSpec
     log = File.join(root, "transport.jsonl")
     pipe = "/fake/app-tools.sock"
     server = nil.as(IO?)
+    windows_server = nil.as(Process?)
+    result_file = File.join(root, "result")
+    File.write(result_file, "success")
     {% if flag?(:linux) %}
       pipe = File.join(root, "app-tools.sock")
       server = UNIXServer.new(pipe)
       spawn { serve_fake_app_tools(server, pipe, log) }
-    {% end %}
-    File.write(node, <<-'RUBY')
-      #!/usr/bin/env ruby
-      require "json"
-      input = JSON.parse(STDIN.read)
-      File.open(ENV.fetch("CODEX_BRIDGE_SPEC_LOG"), "a") { |file| file.puts(input.to_json) }
-      if input.fetch("operation") == "discover"
-        puts({path: input.fetch("candidates").first}.to_json)
-      else
-        case ENV["CODEX_BRIDGE_SPEC_RESULT"]
-        when "rejected"
-          puts({error: "rejected", message: "native rejection"}.to_json)
-        when "unknown"
-          puts({error: "receipt_unknown", message: "connection closed"}.to_json)
-        when "malformed"
-          puts "not json"
-        else
-          puts({path: input.fetch("candidates").first, sent: true}.to_json)
-        end
-      end
-      RUBY
-    {% if flag?(:linux) %}
       File.write(node, "#!/bin/sh\nexit 97\n")
+      File.chmod(node, 0o700)
+    {% elsif flag?(:win32) %}
+      name = "codex-bridge-spec-#{Process.pid}-#{Random::Secure.hex(4)}"
+      pipe = "\\\\.\\pipe\\#{name}"
+      script = File.expand_path("support/windows_app_tools_server.ps1", __DIR__)
+      ready = File.join(root, "ready")
+      File.write(node, "metadata only")
+      windows_server = Process.new(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          script,
+          name,
+          log,
+          result_file,
+          ready,
+        ],
+        output: Process::Redirect::Close,
+        error: Process::Redirect::Inherit
+      )
+      200.times do
+        break if File.exists?(ready)
+        sleep 10.milliseconds
+      end
+      raise "fake app-tools pipe did not start" unless File.exists?(ready)
+    {% else %}
+      File.write(node, <<-'RUBY')
+        #!/usr/bin/env ruby
+        require "json"
+        input = JSON.parse(STDIN.read)
+        File.open(ENV.fetch("CODEX_BRIDGE_SPEC_LOG"), "a") { |file| file.puts(input.to_json) }
+        if input.fetch("operation") == "discover"
+          puts({path: input.fetch("candidates").first}.to_json)
+        else
+          case ENV["CODEX_BRIDGE_SPEC_RESULT"]
+          when "rejected"
+            puts({error: "rejected", message: "native rejection"}.to_json)
+          when "unknown"
+            puts({error: "receipt_unknown", message: "connection closed"}.to_json)
+          when "malformed"
+            puts "not json"
+          else
+            puts({path: input.fetch("candidates").first, sent: true}.to_json)
+          end
+        end
+        RUBY
+      File.chmod(node, 0o700)
     {% end %}
-    File.chmod(node, 0o700)
     previous_node = ENV["CODEX_MCP_NODE_PATH"]?
     previous_pipe = ENV["CODEX_APP_TOOLS_PIPE_PATH"]?
     previous_log = ENV["CODEX_BRIDGE_SPEC_LOG"]?
     previous_result = ENV["CODEX_BRIDGE_SPEC_RESULT"]?
+    previous_result_file = ENV["CODEX_BRIDGE_SPEC_RESULT_FILE"]?
     ENV["CODEX_MCP_NODE_PATH"] = node
     ENV["CODEX_APP_TOOLS_PIPE_PATH"] = pipe
     ENV["CODEX_BRIDGE_SPEC_LOG"] = log
+    ENV["CODEX_BRIDGE_SPEC_RESULT_FILE"] = result_file
     ENV.delete("CODEX_BRIDGE_SPEC_RESULT")
     yield root, log
   ensure
     server.try(&.close)
+    windows_server.try(&.terminate)
+    windows_server.try(&.wait)
     restore_env("CODEX_MCP_NODE_PATH", previous_node)
     restore_env("CODEX_APP_TOOLS_PIPE_PATH", previous_pipe)
     restore_env("CODEX_BRIDGE_SPEC_LOG", previous_log)
     restore_env("CODEX_BRIDGE_SPEC_RESULT", previous_result)
+    restore_env("CODEX_BRIDGE_SPEC_RESULT_FILE", previous_result_file)
     FileUtils.rm_r(root) if root && Dir.exists?(root)
+  end
+
+  def self.fake_result(value)
+    ENV["CODEX_BRIDGE_SPEC_RESULT"] = value
+    if path = ENV["CODEX_BRIDGE_SPEC_RESULT_FILE"]?
+      File.write(path, value)
+    end
   end
 
   def self.restore_env(key, value)

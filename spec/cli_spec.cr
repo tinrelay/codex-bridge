@@ -84,7 +84,7 @@ describe CodexBridge::CLI do
 
   it "distinguishes definite rejection from an unknown receipt" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
-      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "rejected"
+      CodexBridgeSpec.fake_result("rejected")
       rejected_error = IO::Memory.new
       rejected = CodexBridge::CLI.run(
         [CodexBridgeSpec::TASK],
@@ -94,7 +94,7 @@ describe CodexBridge::CLI do
         CodexBridge::Client.new(root)
       )
 
-      ENV["CODEX_BRIDGE_SPEC_RESULT"] = "unknown"
+      CodexBridgeSpec.fake_result("unknown")
       unknown_error = IO::Memory.new
       unknown = CodexBridge::CLI.run(
         [CodexBridgeSpec::TASK],
