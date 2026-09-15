@@ -125,10 +125,10 @@ The last working socket path is stored in a small `kv` table in
 `~/.codex/codex-bridge/state.db`. Current macOS relay sockets in that directory are tried before a
 cached endpoint. Each call validates the cached endpoint and scans again when it is stale. Library
 consumers can call `CodexBridge.discover` to get a `Connection` containing
-`socket_file`, `node_path`, and `codex_resources`, or pass those values to `Client.new` as explicit
-keywords. Pass another `state_home` to `Client` or use CLI `--state-home PATH` when embedding the
-bridge elsewhere. `CODEX_APP_TOOLS_PIPE_PATH` and Codex's bundled-runtime environment variables are
-used when present.
+`socket_file`, `node_path`, and `codex_resources`. Pass another `state_home` to `Client` or use CLI
+`--state-home PATH` when embedding the bridge elsewhere. `Client` accepts an explicit `socket_file`;
+runtime metadata is diagnostic and never gates delivery. `CODEX_APP_TOOLS_PIPE_PATH` and Codex's
+bundled-runtime environment variables are used when present.
 
 The same bridge-owned SQLite database briefly serializes submissions so concurrent clients cannot
 claim the same fallback confirmation. Codex's `thread_history_1.sqlite` is read only after an

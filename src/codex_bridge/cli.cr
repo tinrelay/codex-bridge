@@ -135,14 +135,17 @@ module CodexBridge
         return 0
       end
       raise ArgumentError.new("one task ID is required") unless argv.size == 1
+      if codex_path || node_path || codex_resources
+        raise ArgumentError.new(
+          "--codex-path, --node-path, and --codex-resources are only valid for installation or diagnostics"
+        )
+      end
 
       body = input.gets_to_end
       bridge = client || Client.new(
         codex_home,
         state_home: state_home,
         socket_file: socket_file,
-        node_path: node_path,
-        codex_resources: codex_resources,
         cache: cache,
         timeout: timeout
       )

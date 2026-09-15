@@ -11,8 +11,6 @@ module CodexBridge
       @codex_home = ENV["CODEX_HOME"]? || Path.home.join(".codex").to_s,
       state_home : String? = nil,
       @socket_file : String? = nil,
-      @node_path : String? = nil,
-      @codex_resources : String? = nil,
       @cache = true,
       @timeout : Time::Span = DEFAULT_TIMEOUT,
     )
@@ -68,11 +66,9 @@ module CodexBridge
       backoff = DISCOVERY_INITIAL_BACKOFF
       loop do
         return if Time.instant >= deadline
-        endpoint = AppToolsEndpoint.discover(
+        endpoint = AppToolsEndpoint.discover_delivery(
           state_home,
           socket_file: @socket_file,
-          node_path: @node_path,
-          codex_resources: @codex_resources,
           cache: @cache,
           deadline: deadline
         )

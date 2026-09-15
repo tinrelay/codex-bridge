@@ -61,6 +61,22 @@ describe CodexBridge::CLI do
     error.to_s.should contain("timeout must be a non-negative number")
   end
 
+  it "rejects install and diagnostic runtime overrides for delivery" do
+    ["--codex-path", "--node-path", "--codex-resources"].each do |option|
+      error = IO::Memory.new
+      status = CodexBridge::CLI.run(
+        [option, "C:\\ignored", CodexBridgeSpec::TASK],
+        IO::Memory.new("Hello"),
+        IO::Memory.new,
+        error,
+        CodexBridge::Client.new
+      )
+
+      status.should eq(2)
+      error.to_s.should contain("only valid for installation or diagnostics")
+    end
+  end
+
   it "installs the macOS relay or reports the platform no-op" do
     {% if flag?(:darwin) %}
       CodexBridgeSpec.with_fake_installer do |codex_home, state_home, codex, node, _log|
@@ -133,7 +149,7 @@ describe CodexBridge::CLI do
         IO::Memory.new("Hello"),
         IO::Memory.new,
         rejected_error,
-        CodexBridge::Client.new(root, timeout: 50.milliseconds)
+        CodexBridge::Client.new(root, timeout: 2.seconds)
       )
 
       CodexBridgeSpec.fake_result("unknown")
@@ -143,7 +159,7 @@ describe CodexBridge::CLI do
         IO::Memory.new("Hello"),
         IO::Memory.new,
         unknown_error,
-        CodexBridge::Client.new(root, timeout: 50.milliseconds)
+        CodexBridge::Client.new(root, timeout: 2.seconds)
       )
 
       rejected.should eq(3)

@@ -14,8 +14,44 @@ module CodexBridge
       cache = true,
       deadline : Time::Instant? = nil,
     ) : self?
+      path = discover_path(
+        state_home,
+        candidates,
+        socket_file: socket_file,
+        cache: cache,
+        deadline: deadline
+      )
+      return unless path
       node, resources = bundled_node(node_path, codex_resources)
+      new(Connection.new(path, node, resources))
+    end
 
+    def self.discover_delivery(
+      state_home : String,
+      candidates : Enumerable(String)? = nil,
+      *,
+      socket_file : String? = nil,
+      cache = true,
+      deadline : Time::Instant? = nil,
+    ) : self?
+      path = discover_path(
+        state_home,
+        candidates,
+        socket_file: socket_file,
+        cache: cache,
+        deadline: deadline
+      )
+      path ? new(Connection.new(path, nil, nil)) : nil
+    end
+
+    private def self.discover_path(
+      state_home,
+      candidates,
+      *,
+      socket_file,
+      cache,
+      deadline,
+    ) : String?
       state = StateStore.new(state_home)
       paths = [] of String
       if socket_file
@@ -40,7 +76,7 @@ module CodexBridge
       path = AppToolsTransport.discover(paths.uniq, deadline)
       return unless path
       state.put(CACHE_KEY, path) if cache
-      new(Connection.new(path, node, resources))
+      path
     end
 
     def initialize(@connection)

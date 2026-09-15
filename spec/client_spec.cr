@@ -81,6 +81,26 @@ describe CodexBridge::Client do
     FileUtils.rm_r(root) if root && Dir.exists?(root)
   end
 
+  it "delivers without resolving optional runtime metadata" do
+    CodexBridgeSpec.with_fake_app_tools do |root, log|
+      previous_node = ENV.delete("CODEX_MCP_NODE_PATH")
+      previous_resources = ENV.delete("CODEX_ELECTRON_RESOURCES_PATH")
+      begin
+        CodexBridge::Client.new(
+          root,
+          socket_file: ENV["CODEX_APP_TOOLS_PIPE_PATH"],
+          cache: false,
+          timeout: 2.seconds
+        ).send_message(CodexBridgeSpec::TASK, "Hello")
+
+        CodexBridgeSpec.transport_requests(log).last["operation"].as_s.should eq("send")
+      ensure
+        CodexBridgeSpec.restore_env("CODEX_MCP_NODE_PATH", previous_node)
+        CodexBridgeSpec.restore_env("CODEX_ELECTRON_RESOURCES_PATH", previous_resources)
+      end
+    end
+  end
+
   it "rejects a negative timeout" do
     expect_raises(ArgumentError, "timeout cannot be negative") do
       CodexBridge::Client.new(timeout: -1.second)
@@ -152,7 +172,7 @@ describe CodexBridge::Client do
       CodexBridgeSpec.fake_result("unknown")
 
       expect_raises(CodexBridge::ReceiptUnknown, "connection closed") do
-        CodexBridge::Client.new(root, timeout: 50.milliseconds)
+        CodexBridge::Client.new(root, timeout: 2.seconds)
           .send_message(CodexBridgeSpec::TASK, "Hello")
       end
     end
@@ -215,7 +235,7 @@ describe CodexBridge::Client do
       CodexBridgeSpec.fake_result("malformed")
 
       expect_raises(CodexBridge::ReceiptUnknown, "invalid_app_tools_response") do
-        CodexBridge::Client.new(root, timeout: 50.milliseconds)
+        CodexBridge::Client.new(root, timeout: 2.seconds)
           .send_message(CodexBridgeSpec::TASK, "Hello")
       end
     end
