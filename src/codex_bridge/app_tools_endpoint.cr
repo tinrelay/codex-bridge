@@ -12,6 +12,7 @@ module CodexBridge
       node_path : String? = nil,
       codex_resources : String? = nil,
       cache = true,
+      deadline : Time::Instant? = nil,
     ) : self?
       node, resources = bundled_node(node_path, codex_resources)
 
@@ -36,7 +37,7 @@ module CodexBridge
         end
       end
 
-      path = AppToolsTransport.discover(paths.uniq)
+      path = AppToolsTransport.discover(paths.uniq, deadline)
       return unless path
       state.put(CACHE_KEY, path) if cache
       new(Connection.new(path, node, resources))
@@ -45,8 +46,19 @@ module CodexBridge
     def initialize(@connection)
     end
 
-    def send_message(source_task_id : String, target_task_id : String, prompt : String)
-      AppToolsTransport.send_message(connection.socket_file, source_task_id, target_task_id, prompt)
+    def send_message(
+      source_task_id : String,
+      target_task_id : String,
+      prompt : String,
+      timeout : Time::Span,
+    )
+      AppToolsTransport.send_message(
+        connection.socket_file,
+        source_task_id,
+        target_task_id,
+        prompt,
+        timeout
+      )
     end
 
     private def self.bundled_node(explicit_node, explicit_resources)

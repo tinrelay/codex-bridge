@@ -19,6 +19,9 @@ bridge = CodexBridge::Client.new
 bridge.send_message(task_id, "Please look at this.")
 ```
 
+`Client.new(timeout: 60.seconds)` controls the complete delivery budget: endpoint discovery,
+native submission, and confirmation when Codex loses the native receipt. The default is 60 seconds.
+
 On macOS, install codex-bridge's narrow relay MCP once and restart Codex when requested:
 
 ```crystal
@@ -43,10 +46,12 @@ persistence. Because default self-attribution looks like a task addressing itsel
 should put a clear origin cue in the message body when the recipient would not otherwise understand
 where it came from. codex-bridge does not invent that label.
 
-A normal return means Codex definitely received the message. `NotReceived` means submission
-definitely failed and a caller may choose to retry or fall back. `ReceiptUnknown` means submission
-may have succeeded and must not trigger an automatic retry or fallback. The CLI reports those as
-exit statuses 3 and 4 respectively.
+A normal return means Codex definitely received the message. If Codex closes the native connection
+after submission, codex-bridge uses the remainder of the timeout to look for the exact newer
+delivery in Codex's local thread history. It never resubmits during that check. `NotReceived` means
+submission definitely failed and a caller may choose to retry or fall back. `ReceiptUnknown` means
+neither the native receipt nor local history established the outcome and must not trigger an
+automatic retry or fallback. The CLI reports those as exit statuses 3 and 4 respectively.
 
 ## CLI
 
@@ -57,6 +62,7 @@ echo 'Please acknowledge this test.' | codex-bridge TASK_ID
 ```
 
 This uses self-attribution. Use `--from-task TASK_ID` for intentional task-to-task attribution.
+Use `--timeout SECONDS` to change the default 60-second overall delivery budget.
 
 ```sh
 echo 'Please acknowledge this test.' \
@@ -102,7 +108,7 @@ Native Crystal IO is the normal transport. On Linux and Windows, codex-bridge sp
 length-prefixed JSON-RPC protocol directly over the per-user Unix socket or named pipe. On macOS,
 `install` copies an embedded relay to `~/.codex/codex-bridge/relay.mjs` and registers it with stock
 Codex as an ordinary MCP server. Each loaded task launches one relay through Codex's own process
-tree and creates a user-only `codex-bridge-relay-PID-UUID.sock` beside codex-bridge's `state.db`.
+tree and creates a user-only `relay-PID.sock` beside codex-bridge's `state.db`.
 codex-bridge then uses the same native Crystal protocol against that socket. The relay accepts only
 the read-only discovery call and `codex_app/send_message_to_thread`; it does not expose arbitrary
 app tools. The macOS client searches only its configured state directory for relay sockets; unlike
@@ -123,6 +129,11 @@ consumers can call `CodexBridge.discover` to get a `Connection` containing
 keywords. Pass another `state_home` to `Client` or use CLI `--state-home PATH` when embedding the
 bridge elsewhere. `CODEX_APP_TOOLS_PIPE_PATH` and Codex's bundled-runtime environment variables are
 used when present.
+
+The same bridge-owned SQLite database briefly serializes submissions so concurrent clients cannot
+claim the same fallback confirmation. Codex's `thread_history_1.sqlite` is read only after an
+uncertain native result, and only for a newer exact source-and-body delivery record. Message bodies
+are not copied into bridge state or logs.
 
 This boundary is private and version-sensitive. codex-bridge exposes message delivery and the
 connection facts needed to reuse its discovery; it does not provide a generic interface to Codex's

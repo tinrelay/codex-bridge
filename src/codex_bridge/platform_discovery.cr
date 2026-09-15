@@ -1,7 +1,7 @@
 module CodexBridge
   private module PlatformDiscovery
     UNIX_SOCKET_ROOT    = "/tmp"
-    RELAY_SOCKET_PREFIX = "codex-bridge-relay-"
+    RELAY_SOCKET_PREFIX = "relay-"
     WINDOWS_PIPE_PREFIX = %q(\\.\pipe\codex-browser-use-)
 
     POWERSHELL_APPX =

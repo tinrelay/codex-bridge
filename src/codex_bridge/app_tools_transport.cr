@@ -1,7 +1,10 @@
 module CodexBridge
   private module AppToolsTransport
-    def self.discover(candidates : Array(String)) : String?
-      AppToolsNative.discover(candidates)
+    def self.discover(
+      candidates : Array(String),
+      deadline : Time::Instant? = nil,
+    ) : String?
+      AppToolsNative.discover(candidates, deadline)
     end
 
     def self.send_message(
@@ -9,8 +12,9 @@ module CodexBridge
       source_task_id : String,
       target_task_id : String,
       prompt : String,
+      timeout : Time::Span = AppToolsNative::SEND_TIMEOUT,
     )
-      AppToolsNative.send_message(socket_file, source_task_id, target_task_id, prompt)
+      AppToolsNative.send_message(socket_file, source_task_id, target_task_id, prompt, timeout)
     end
   end
 
@@ -19,14 +23,23 @@ module CodexBridge
     DISCOVERY_TIMEOUT = 250.milliseconds
     SEND_TIMEOUT      = 20.seconds
 
-    def self.discover(candidates : Enumerable(String)) : String?
+    def self.discover(
+      candidates : Enumerable(String),
+      deadline : Time::Instant? = nil,
+    ) : String?
       candidates.each do |path|
+        timeout = DISCOVERY_TIMEOUT
+        if deadline
+          remaining = deadline - Time.instant
+          return if remaining <= 0.seconds
+          timeout = remaining if remaining < timeout
+        end
         begin
           result = request(
             path,
             "tools/list",
             {threadStartKind: "all"},
-            DISCOVERY_TIMEOUT
+            timeout
           )
           tools = result["tools"].as_a
           if tools.any? do |tool|
@@ -63,6 +76,7 @@ module CodexBridge
       source_task_id : String,
       target_task_id : String,
       prompt : String,
+      timeout : Time::Span = SEND_TIMEOUT,
     )
       call_id = "codex-bridge-#{UUID.random}"
       result = request(
@@ -80,7 +94,7 @@ module CodexBridge
           tool:      "send_message_to_thread",
           turnId:    call_id,
         },
-        SEND_TIMEOUT,
+        timeout,
         mutating: true
       )
       raise AppToolsRejected.new("message rejected") if result["success"]?.try(&.as_bool?) == false

@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -8,13 +7,16 @@ import readline from "node:readline";
 const MAX_FRAME = 8 * 1024 * 1024;
 const SEND_TOOL = "send_message_to_thread";
 const STOCK_SOCKET_ROOT = "/tmp/codex-browser-use";
-const relayGeneration = process.argv[3];
+const DISCOVERY_WINDOW_MS = 60_000;
+const DISCOVERY_INITIAL_BACKOFF_MS = 100;
+const DISCOVERY_MAX_BACKOFF_MS = 5_000;
+const relayGeneration = process.argv[2];
 let nativePipe;
-const stateHome = process.argv[2] || process.env.CODEX_BRIDGE_STATE_HOME ||
+const stateHome = process.env.CODEX_BRIDGE_STATE_HOME ||
   path.join(os.homedir(), ".codex", "codex-bridge");
 const relayPath = path.join(
   stateHome,
-  `codex-bridge-relay-${process.pid}-${crypto.randomUUID()}.sock`
+  `relay-${process.pid}.sock`
 );
 
 let relayServer;
@@ -92,9 +94,10 @@ function advertisesSendTool(candidate) {
       try {
         const response = JSON.parse(buffer.subarray(4, size + 4).toString("utf8"));
         const tools = Array.isArray(response?.result?.tools) ? response.result.tools : [];
-        finish(tools.some(tool =>
+        const sendTool = tools.some(tool =>
           tool?.namespace === "codex_app" && tool?.name === SEND_TOOL
-        ));
+        );
+        finish(sendTool);
       } catch {
         finish(false);
       }
@@ -110,7 +113,7 @@ async function discoverNativePipe() {
   try {
     const names = await fs.promises.readdir(STOCK_SOCKET_ROOT);
     for (const name of names.sort()) {
-      if (name.endsWith(".sock") && !name.startsWith("codex-bridge-relay-")) {
+      if (name.endsWith(".sock") && !name.startsWith("relay-")) {
         candidates.push(path.join(STOCK_SOCKET_ROOT, name));
       }
     }
@@ -119,7 +122,25 @@ async function discoverNativePipe() {
   }
 
   for (const candidate of [...new Set(candidates)]) {
-    if (await advertisesSendTool(candidate)) return candidate;
+    if (await advertisesSendTool(candidate)) {
+      return candidate;
+    }
+  }
+}
+
+async function waitForNativePipe() {
+  const deadline = Date.now() + DISCOVERY_WINDOW_MS;
+  let backoff = DISCOVERY_INITIAL_BACKOFF_MS;
+
+  while (true) {
+    const candidate = await discoverNativePipe();
+    if (candidate) return candidate;
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+    const delay = Math.min(backoff, remaining);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    backoff = Math.min(backoff * 2, DISCOVERY_MAX_BACKOFF_MS);
   }
 }
 
@@ -149,7 +170,7 @@ async function removeDeadRelays() {
   }
 
   for (const name of names.sort()) {
-    if (!name.startsWith("codex-bridge-relay-") || !name.endsWith(".sock")) continue;
+    if (!name.startsWith("relay-") || !name.endsWith(".sock")) continue;
     const candidate = path.join(stateHome, name);
     if (await relayIsDead(candidate)) {
       await fs.promises.unlink(candidate).catch(() => {});
@@ -247,7 +268,7 @@ function answerMcp(message) {
     result = {
       protocolVersion: message.params?.protocolVersion || "2024-11-05",
       capabilities: {tools: {}},
-      serverInfo: {name: "codex-bridge-relay", version: "0.2.0"}
+      serverInfo: {name: "codex-bridge-relay", version: "0.3.0"}
     };
   } else if (message.method === "tools/list") {
     result = {tools: []};
@@ -301,6 +322,8 @@ input.on("line", line => {
 });
 input.on("close", async () => { await cleanup(); process.exit(0); });
 
+await fs.promises.mkdir(stateHome, {recursive: true, mode: 0o700});
+await fs.promises.chmod(stateHome, 0o700);
 await removeDeadRelays();
-nativePipe = await discoverNativePipe();
+nativePipe = await waitForNativePipe();
 await startRelay();

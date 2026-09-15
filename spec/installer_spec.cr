@@ -34,7 +34,7 @@ describe ".install" do
         )
         generation = File.read(log).split.last
         File.write(log, "")
-        socket_path = File.join(state_home, "codex-bridge-relay-123.sock")
+        socket_path = File.join(state_home, "relay-123.sock")
         server = UNIXServer.new(socket_path)
         handled = Channel(Nil).new
         spawn do
@@ -65,7 +65,7 @@ describe ".install" do
           node_path: node
         )
         File.write(log, "")
-        socket_path = File.join(state_home, "codex-bridge-relay-123.sock")
+        socket_path = File.join(state_home, "relay-123.sock")
         server = UNIXServer.new(socket_path)
         handled = Channel(Nil).new
         spawn do

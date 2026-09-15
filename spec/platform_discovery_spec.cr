@@ -40,9 +40,9 @@ module CodexBridge
       end
 
       it "does not mistake similarly named stock sockets for relay sockets" do
-        PlatformDiscovery.relay_socket?("/tmp/codex-browser-use/codex-bridge-relay-123.sock").should be_true
+        PlatformDiscovery.relay_socket?("/tmp/codex-browser-use/relay-123.sock").should be_true
         PlatformDiscovery.relay_socket?("/tmp/codex-browser-use/codex-bridge-relay.sock").should be_false
-        PlatformDiscovery.relay_socket?("/tmp/codex-browser-use/not-codex-bridge-relay-123.sock").should be_false
+        PlatformDiscovery.relay_socket?("/tmp/codex-browser-use/not-relay-123.sock").should be_false
       end
     {% end %}
 

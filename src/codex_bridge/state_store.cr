@@ -27,10 +27,28 @@ module CodexBridge
       false
     end
 
-    private def open(&)
+    def with_send_lock(timeout : Time::Span, &)
+      open(timeout) do |database|
+        database.exec("BEGIN IMMEDIATE")
+        begin
+          value = yield
+          database.exec("COMMIT")
+          value
+        rescue ex
+          begin
+            database.exec("ROLLBACK")
+          rescue DB::Error
+          end
+          raise ex
+        end
+      end
+    end
+
+    private def open(timeout = 1.second, &)
       Dir.mkdir_p(@state_home, mode: 0o700)
       path = File.join(@state_home, "state.db")
-      DB.open("sqlite3://#{URI.encode_path(path)}?busy_timeout=1000") do |database|
+      milliseconds = timeout.total_milliseconds.clamp(0, Int32::MAX).to_i
+      DB.open("sqlite3://#{URI.encode_path(path)}?busy_timeout=#{milliseconds}") do |database|
         {% unless flag?(:win32) %}
           File.chmod(path, 0o600)
         {% end %}

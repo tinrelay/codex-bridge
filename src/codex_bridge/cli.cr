@@ -18,6 +18,7 @@ module CodexBridge
           --node-path PATH     Bundled Codex Node path (install/diagnostics)
           --codex-resources PATH
                                Codex resources directory containing cua_node
+          --timeout SECONDS    Maximum time for delivery work (default: 60)
           --uncached           Do not read or write the socket cache
           --install            Install the stock-macOS relay MCP
           --discover           Print the resolved connection as JSON
@@ -45,6 +46,7 @@ module CodexBridge
       socket_file = nil.as(String?)
       node_path = nil.as(String?)
       codex_resources = nil.as(String?)
+      timeout = Client::DEFAULT_TIMEOUT
       cache = true
       parser = OptionParser.new do |options|
         options.on("--from-task TASK_ID", "Attribute the message to another task") do |task_id|
@@ -61,6 +63,9 @@ module CodexBridge
         end
         options.on("--codex-resources PATH", "Codex resources directory") do |path|
           codex_resources = path
+        end
+        options.on("--timeout SECONDS", "Maximum time for delivery work") do |value|
+          timeout = parse_timeout(value)
         end
         options.on("--uncached", "Do not read or write the socket cache") { cache = false }
         options.on("--install", "Install the stock-macOS relay MCP") { install = true }
@@ -138,7 +143,8 @@ module CodexBridge
         socket_file: socket_file,
         node_path: node_path,
         codex_resources: codex_resources,
-        cache: cache
+        cache: cache,
+        timeout: timeout
       )
       bridge.send_message(argv.first, body, from: source_task_id)
       output.puts "sent #{argv.first}"
@@ -155,6 +161,14 @@ module CodexBridge
     rescue ex : InstallError
       error.puts "codex-bridge: install failed: #{ex.reason}"
       5
+    end
+
+    private def self.parse_timeout(value : String) : Time::Span
+      seconds = value.to_f64?
+      unless seconds && seconds.finite? && seconds >= 0
+        raise ArgumentError.new("timeout must be a non-negative number")
+      end
+      seconds.seconds
     end
   end
 end

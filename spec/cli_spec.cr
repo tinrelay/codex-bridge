@@ -48,6 +48,19 @@ describe CodexBridge::CLI do
     error.to_s.should be_empty
   end
 
+  it "rejects an invalid timeout" do
+    error = IO::Memory.new
+    status = CodexBridge::CLI.run(
+      ["--timeout", "never", CodexBridgeSpec::TASK],
+      IO::Memory.new("Hello"),
+      IO::Memory.new,
+      error
+    )
+
+    status.should eq(2)
+    error.to_s.should contain("timeout must be a non-negative number")
+  end
+
   it "installs the macOS relay or reports the platform no-op" do
     {% if flag?(:darwin) %}
       CodexBridgeSpec.with_fake_installer do |codex_home, state_home, codex, node, _log|
@@ -120,7 +133,7 @@ describe CodexBridge::CLI do
         IO::Memory.new("Hello"),
         IO::Memory.new,
         rejected_error,
-        CodexBridge::Client.new(root)
+        CodexBridge::Client.new(root, timeout: 50.milliseconds)
       )
 
       CodexBridgeSpec.fake_result("unknown")
@@ -130,7 +143,7 @@ describe CodexBridge::CLI do
         IO::Memory.new("Hello"),
         IO::Memory.new,
         unknown_error,
-        CodexBridge::Client.new(root)
+        CodexBridge::Client.new(root, timeout: 50.milliseconds)
       )
 
       rejected.should eq(3)
