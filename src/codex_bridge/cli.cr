@@ -4,6 +4,7 @@ module CodexBridge
   module CLI
     HELP = <<-TEXT
       Usage: codex-bridge [options] TASK_ID < message.txt
+             codex-bridge --install [options]
              codex-bridge --discover [options]
              codex-bridge --variable NAME [options]
 
@@ -12,11 +13,13 @@ module CodexBridge
           --from-task TASK_ID  Attribute the message to another real task
           --codex-home PATH    Codex data directory (default: $CODEX_HOME or ~/.codex)
           --state-home PATH    codex-bridge state directory
+          --codex-path PATH    Stock Codex executable (installation only)
           --socket-file PATH   Use this exact app-tools socket
-          --node-path PATH     Bundled Node path (used by macOS transport)
+          --node-path PATH     Bundled Codex Node path (install/diagnostics)
           --codex-resources PATH
                                Codex resources directory containing cua_node
           --uncached           Do not read or write the socket cache
+          --install            Install the stock-macOS relay MCP
           --discover           Print the resolved connection as JSON
           --variable NAME      Print socket_file, node_path, or codex_resources
           --version            Print the version
@@ -33,10 +36,12 @@ module CodexBridge
       show_help = false
       show_version = false
       discover = false
+      install = false
       variable = nil.as(String?)
       source_task_id = nil.as(String?)
       codex_home = ENV["CODEX_HOME"]? || Path.home.join(".codex").to_s
       state_home = nil.as(String?)
+      codex_path = nil.as(String?)
       socket_file = nil.as(String?)
       node_path = nil.as(String?)
       codex_resources = nil.as(String?)
@@ -49,14 +54,16 @@ module CodexBridge
         options.on("--state-home PATH", "codex-bridge state directory") do |path|
           state_home = path
         end
+        options.on("--codex-path PATH", "Stock Codex executable") { |path| codex_path = path }
         options.on("--socket-file PATH", "Exact app-tools socket") { |path| socket_file = path }
-        options.on("--node-path PATH", "Bundled Node path (used by macOS transport)") do |path|
+        options.on("--node-path PATH", "Bundled Codex Node path") do |path|
           node_path = path
         end
         options.on("--codex-resources PATH", "Codex resources directory") do |path|
           codex_resources = path
         end
         options.on("--uncached", "Do not read or write the socket cache") { cache = false }
+        options.on("--install", "Install the stock-macOS relay MCP") { install = true }
         options.on("--discover", "Print the resolved connection as JSON") { discover = true }
         options.on("--variable NAME", "Print one resolved connection value") { |name| variable = name }
         options.on("--version", "Print the version") { show_version = true }
@@ -73,6 +80,19 @@ module CodexBridge
       end
       if show_version
         output.puts "codex-bridge #{VERSION}"
+        return 0
+      end
+      if install
+        raise ArgumentError.new("installation does not accept a task ID") unless argv.empty?
+        raise ArgumentError.new("choose --install or discovery") if discover || variable
+        result = CodexBridge.install(
+          codex_home,
+          state_home: state_home,
+          codex_path: codex_path,
+          node_path: node_path,
+          codex_resources: codex_resources
+        )
+        output.puts result
         return 0
       end
       if discover || variable
@@ -95,7 +115,7 @@ module CodexBridge
         if name = variable
           value = case name
                   when "socket_file"     then connection.socket_file
-                  when "node_path"       then connection.node_path
+                  when "node_path"       then connection.node_path || ""
                   when "codex_resources" then connection.codex_resources || ""
                   else                        raise "unreachable"
                   end
@@ -132,6 +152,9 @@ module CodexBridge
     rescue ex : ReceiptUnknown
       error.puts "codex-bridge: receipt unknown: #{ex.reason}"
       4
+    rescue ex : InstallError
+      error.puts "codex-bridge: install failed: #{ex.reason}"
+      5
     end
   end
 end

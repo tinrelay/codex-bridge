@@ -5,6 +5,8 @@ Codex Desktop task without changing the visible task. Keep callers independent o
 
 - Use Codex's native `codex_app/send_message_to_thread` tool through the app-tools pipe.
 - Stock Codex and runtimes bundled with it are dependencies. TMTK is not.
+- `install` is a no-op on Linux and Windows. On macOS it owns one embedded relay MCP under the
+  bridge state directory and returns whether Codex must restart.
 - Do not launch a second App Server, use renderer history, or navigate the GUI to wake a task.
 - Default the source task to the destination task. Accept an explicit source only for intentional
   attribution to a real task; never manufacture or imply Mike's authority.

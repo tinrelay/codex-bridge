@@ -17,7 +17,7 @@ module CodexBridgeSpec
     windows_server = nil.as(Process?)
     result_file = File.join(root, "result")
     File.write(result_file, "success")
-    {% if flag?(:linux) %}
+    {% if flag?(:linux) || flag?(:darwin) %}
       pipe = File.join(root, "app-tools.sock")
       server = UNIXServer.new(pipe)
       spawn { serve_fake_app_tools(server, pipe, log) }
@@ -116,7 +116,53 @@ module CodexBridgeSpec
     File.read_lines(log).map { |line| JSON.parse(line) }
   end
 
-  {% if flag?(:linux) %}
+  {% if flag?(:darwin) %}
+    def self.with_fake_installer(&)
+      root = "/tmp/cbi-#{Process.pid}-#{Random::Secure.hex(4)}"
+      codex_home = File.join(root, "codex-home")
+      state_home = File.join(codex_home, "codex-bridge")
+      resources = File.join(root, "resources")
+      node = File.join(resources, "cua_node", "bin", "node")
+      codex = File.join(resources, "codex")
+      log = File.join(root, "install.log")
+      FileUtils.mkdir_p(File.dirname(node))
+      File.write(node, "#!/bin/sh\nexit 0\n")
+      File.write(codex, <<-'SH')
+        #!/bin/sh
+        echo "$CODEX_HOME|$@" >> "$CODEX_BRIDGE_INSTALL_LOG"
+        SH
+      File.chmod(node, 0o700)
+      File.chmod(codex, 0o700)
+      previous = ENV["CODEX_BRIDGE_INSTALL_LOG"]?
+      ENV["CODEX_BRIDGE_INSTALL_LOG"] = log
+      yield codex_home, state_home, codex, node, log
+    ensure
+      restore_env("CODEX_BRIDGE_INSTALL_LOG", previous)
+      FileUtils.rm_r(root) if root && Dir.exists?(root)
+    end
+
+    def self.answer_tool_list(client, generation)
+      header = Bytes.new(4)
+      client.read_fully(header)
+      size = IO::ByteFormat::LittleEndian.decode(UInt32, header)
+      request = Bytes.new(size.to_i)
+      client.read_fully(request)
+      response = {
+        id:      1,
+        jsonrpc: "2.0",
+        result:  {
+          codexBridgeRelayGeneration: generation,
+          tools:                      [{name: "send_message_to_thread", namespace: "codex_app"}],
+        },
+      }.to_json.to_slice
+      IO::ByteFormat::LittleEndian.encode(response.size.to_u32, header)
+      client.write(header)
+      client.write(response)
+      client.close
+    end
+  {% end %}
+
+  {% if flag?(:linux) || flag?(:darwin) %}
     private def self.serve_fake_app_tools(server, pipe, log)
       loop do
         client = server.accept

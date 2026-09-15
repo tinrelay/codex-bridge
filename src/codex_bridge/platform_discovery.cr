@@ -1,6 +1,7 @@
 module CodexBridge
   private module PlatformDiscovery
     UNIX_SOCKET_ROOT    = "/tmp"
+    RELAY_SOCKET_PREFIX = "codex-bridge-relay-"
     WINDOWS_PIPE_PREFIX = %q(\\.\pipe\codex-browser-use-)
 
     POWERSHELL_APPX =
@@ -26,7 +27,9 @@ module CodexBridge
     end
 
     def self.socket_candidates : Array(String)
-      {% if flag?(:win32) %}
+      {% if flag?(:darwin) %}
+        [] of String
+      {% elsif flag?(:win32) %}
         windows_socket_candidates
       {% else %}
         unix_socket_candidates
@@ -38,7 +41,18 @@ module CodexBridge
     end
 
     def self.unix_socket_candidates(temporary_root = UNIX_SOCKET_ROOT) : Array(String)
-      Dir.glob(File.join(temporary_root, "codex-browser-use", "*.sock")).sort
+      Dir.glob(File.join(temporary_root, "codex-browser-use", "*.sock"))
+        .reject { |path| relay_socket?(path) }
+        .sort
+    end
+
+    def self.relay_socket_candidates(state_home : String) : Array(String)
+      Dir.glob(File.join(state_home, "#{RELAY_SOCKET_PREFIX}*.sock")).sort
+    end
+
+    def self.relay_socket?(path : String) : Bool
+      name = File.basename(path)
+      name.starts_with?(RELAY_SOCKET_PREFIX) && name.ends_with?(".sock")
     end
 
     def self.windows_resource_candidates(powershell = "powershell.exe") : Array(String)

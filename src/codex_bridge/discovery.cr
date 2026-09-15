@@ -1,7 +1,7 @@
 module CodexBridge
   record Connection,
     socket_file : String,
-    node_path : String,
+    node_path : String?,
     codex_resources : String?
 
   def self.discover(

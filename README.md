@@ -19,6 +19,16 @@ bridge = CodexBridge::Client.new
 bridge.send_message(task_id, "Please look at this.")
 ```
 
+On macOS, install codex-bridge's narrow relay MCP once and restart Codex when requested:
+
+```crystal
+CodexBridge.install # => :ready or :codex_restart_required
+```
+
+The call is idempotent. On Linux and Windows it returns `:ready` without changing files or Codex
+configuration. The qualified VM configurations use Codex's bundled `codex-app-tools` MCP to make
+the stock app-tools endpoint available; codex-bridge then connects to that endpoint directly.
+
 By default, the destination task is also the source task. Codex therefore renders an ordinary
 self-attributed task message rather than implying that Mike or another agent sent it. Supply a real
 source task only when that task is intentionally speaking:
@@ -43,19 +53,29 @@ exit statuses 3 and 4 respectively.
 The included CLI reads the complete message from stdin:
 
 ```sh
-printf 'Please acknowledge this test.\n' | codex-bridge TASK_ID
+echo 'Please acknowledge this test.' | codex-bridge TASK_ID
 ```
 
 This uses self-attribution. Use `--from-task TASK_ID` for intentional task-to-task attribution.
 
 ```sh
-printf 'Please acknowledge this test.\n' \
+echo 'Please acknowledge this test.' \
   | codex-bridge --from-task SOURCE_TASK_ID DESTINATION_TASK_ID
 ```
 
-On qualified stock macOS app bundles, Linux DEB installations, and Windows MSIX installations,
-ordinary sends need no discovery configuration. For diagnostics, embedding, or scripts that need
-the same stock-Codex facts, the CLI can also act as a small discovery tool:
+On macOS, the equivalent installation command is:
+
+```sh
+codex-bridge --install
+```
+
+`ready` means the current Codex process can already use the relay. `codex_restart_required` means
+installation succeeded and Codex must be restarted before messages can use it.
+
+After the macOS install-and-restart step, and on the qualified Linux and Windows configurations
+with the bundled `codex-app-tools` MCP enabled, ordinary sends need no discovery overrides. For
+diagnostics, embedding, or scripts that need the same stock-Codex facts, the CLI can also act as a
+small discovery tool:
 
 ```sh
 codex-bridge --discover
@@ -66,6 +86,7 @@ codex-bridge --variable codex_resources
 
 `--discover` emits one JSON object. Use `--socket-file`, `--node-path`, or `--codex-resources` to
 override one discovered value. `--uncached` skips both reading and writing the SQLite socket cache.
+`node_path` is optional connection metadata; native message delivery does not require it.
 
 The Linux default derives the bundled runtime from `/usr/lib/chatgpt/resources` and scans the
 per-user app-tools sockets under the system temporary directory. Explicit arguments and the Codex
@@ -78,14 +99,26 @@ discovered at runtime rather than embedded in the bridge.
 ## Stock Codex boundary
 
 Native Crystal IO is the normal transport. On Linux and Windows, codex-bridge speaks the
-length-prefixed JSON-RPC protocol directly over the per-user Unix socket or named pipe. It probes
-with the read-only `tools/list` method and selects the endpoint advertising
-`codex_app/send_message_to_thread`. macOS keeps its credential-sensitive bridge in one isolated
-adapter launched with Codex's bundled Node runtime.
+length-prefixed JSON-RPC protocol directly over the per-user Unix socket or named pipe. On macOS,
+`install` copies an embedded relay to `~/.codex/codex-bridge/relay.mjs` and registers it with stock
+Codex as an ordinary MCP server. Each loaded task launches one relay through Codex's own process
+tree and creates a user-only `codex-bridge-relay-PID-UUID.sock` beside codex-bridge's `state.db`.
+codex-bridge then uses the same native Crystal protocol against that socket. The relay accepts only
+the read-only discovery call and `codex_app/send_message_to_thread`; it does not expose arbitrary
+app tools. The macOS client searches only its configured state directory for relay sockets; unlike
+Linux and Windows, it does not scan stock app-tools endpoints. The relay itself performs one
+bounded stock-socket probe when its MCP process starts, then retains that endpoint in memory.
+At the same startup seam it removes only bridge-owned relay sockets that the kernel definitively
+reports as having no listener; ambiguous failures are preserved.
+
+The installer registers the relay with a single SHA-256 identity derived from its embedded source.
+It reports `ready` only when a responding relay carries that identity; a still-running older relay
+therefore continues to require a Codex restart after an update.
 
 The last working socket path is stored in a small `kv` table in
-`~/.codex/codex-bridge/state.db`. Each call validates the cached endpoint first and scans again when
-it is stale. Library consumers can call `CodexBridge.discover` to get a `Connection` containing
+`~/.codex/codex-bridge/state.db`. Current macOS relay sockets in that directory are tried before a
+cached endpoint. Each call validates the cached endpoint and scans again when it is stale. Library
+consumers can call `CodexBridge.discover` to get a `Connection` containing
 `socket_file`, `node_path`, and `codex_resources`, or pass those values to `Client.new` as explicit
 keywords. Pass another `state_home` to `Client` or use CLI `--state-home PATH` when embedding the
 bridge elsewhere. `CODEX_APP_TOOLS_PIPE_PATH` and Codex's bundled-runtime environment variables are

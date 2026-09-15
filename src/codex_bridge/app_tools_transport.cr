@@ -1,39 +1,16 @@
 module CodexBridge
   private module AppToolsTransport
-    def self.accepts_node_path?(path : String) : Bool
-      {% if flag?(:darwin) %}
-        AppToolsNodeTransport.available?(path)
-      {% else %}
-        File.exists?(path)
-      {% end %}
-    end
-
-    def self.discover(node : String, candidates : Array(String)) : String?
-      {% if flag?(:darwin) %}
-        AppToolsNodeTransport.discover(node, candidates)
-      {% else %}
-        AppToolsNative.discover(candidates)
-      {% end %}
+    def self.discover(candidates : Array(String)) : String?
+      AppToolsNative.discover(candidates)
     end
 
     def self.send_message(
-      node : String,
       socket_file : String,
       source_task_id : String,
       target_task_id : String,
       prompt : String,
     )
-      {% if flag?(:darwin) %}
-        AppToolsNodeTransport.send_message(
-          node,
-          socket_file,
-          source_task_id,
-          target_task_id,
-          prompt
-        )
-      {% else %}
-        AppToolsNative.send_message(socket_file, source_task_id, target_task_id, prompt)
-      {% end %}
+      AppToolsNative.send_message(socket_file, source_task_id, target_task_id, prompt)
     end
   end
 
@@ -63,6 +40,22 @@ module CodexBridge
         end
       end
       nil
+    end
+
+    def self.relay_generation?(candidates : Enumerable(String), generation : String) : Bool
+      candidates.any? do |path|
+        begin
+          result = request(
+            path,
+            "tools/list",
+            {threadStartKind: "all"},
+            DISCOVERY_TIMEOUT
+          )
+          result["codexBridgeRelayGeneration"]?.try(&.as_s?) == generation
+        rescue AppToolsRejected | AppToolsReceiptUnknown
+          false
+        end
+      end
     end
 
     def self.send_message(

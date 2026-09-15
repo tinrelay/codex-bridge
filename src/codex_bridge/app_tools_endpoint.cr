@@ -14,14 +14,16 @@ module CodexBridge
       cache = true,
     ) : self?
       node, resources = bundled_node(node_path, codex_resources)
-      return unless node
 
       state = StateStore.new(state_home)
       paths = [] of String
       if socket_file
         paths << socket_file
-      elsif cache && (cached = state.get(CACHE_KEY))
-        paths << cached
+      else
+        paths.concat(PlatformDiscovery.relay_socket_candidates(state_home))
+        if cache && (cached = state.get(CACHE_KEY))
+          paths << cached
+        end
       end
       unless socket_file
         if configured = ENV["CODEX_APP_TOOLS_PIPE_PATH"]?
@@ -34,7 +36,7 @@ module CodexBridge
         end
       end
 
-      path = AppToolsTransport.discover(node, paths.uniq)
+      path = AppToolsTransport.discover(paths.uniq)
       return unless path
       state.put(CACHE_KEY, path) if cache
       new(Connection.new(path, node, resources))
@@ -44,20 +46,14 @@ module CodexBridge
     end
 
     def send_message(source_task_id : String, target_task_id : String, prompt : String)
-      AppToolsTransport.send_message(
-        connection.node_path,
-        connection.socket_file,
-        source_task_id,
-        target_task_id,
-        prompt
-      )
+      AppToolsTransport.send_message(connection.socket_file, source_task_id, target_task_id, prompt)
     end
 
     private def self.bundled_node(explicit_node, explicit_resources)
       return {explicit_node, resources_for(explicit_node, explicit_resources)} if explicit_node
       if explicit_resources
         node = File.join(explicit_resources, "cua_node", "bin", node_name)
-        return {node, explicit_resources} if AppToolsTransport.accepts_node_path?(node)
+        return {node, explicit_resources} if File.exists?(node)
         return {nil, explicit_resources}
       end
 
@@ -74,7 +70,7 @@ module CodexBridge
       PlatformDiscovery.resource_candidates.each do |resources|
         paths << {File.join(resources, "cua_node", "bin", node_name), resources}
       end
-      paths.find { |path, _| AppToolsTransport.accepts_node_path?(path) } || {nil, nil}
+      paths.find { |path, _| File.exists?(path) } || {nil, nil}
     end
 
     private def self.resources_for(node_path, configured_resources)

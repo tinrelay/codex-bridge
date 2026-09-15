@@ -48,6 +48,35 @@ describe CodexBridge::CLI do
     error.to_s.should be_empty
   end
 
+  it "installs the macOS relay or reports the platform no-op" do
+    {% if flag?(:darwin) %}
+      CodexBridgeSpec.with_fake_installer do |codex_home, state_home, codex, node, _log|
+        output = IO::Memory.new
+        status = CodexBridge::CLI.run(
+          [
+            "--install",
+            "--codex-home", codex_home,
+            "--state-home", state_home,
+            "--codex-path", codex,
+            "--node-path", node,
+          ],
+          IO::Memory.new,
+          output,
+          IO::Memory.new
+        )
+
+        status.should eq(0)
+        output.to_s.should eq("codex_restart_required\n")
+      end
+    {% else %}
+      output = IO::Memory.new
+      status = CodexBridge::CLI.run(["--install"], IO::Memory.new, output, IO::Memory.new)
+
+      status.should eq(0)
+      output.to_s.should eq("ready\n")
+    {% end %}
+  end
+
   it "prints all resolved discovery values as JSON" do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
       socket_file = ENV["CODEX_APP_TOOLS_PIPE_PATH"]

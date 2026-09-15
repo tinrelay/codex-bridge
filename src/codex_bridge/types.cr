@@ -15,6 +15,8 @@ module CodexBridge
 
   class ReceiptUnknown < Error; end
 
+  class InstallError < Error; end
+
   private class AppToolsRejected < Exception; end
 
   private class AppToolsReceiptUnknown < Exception; end
