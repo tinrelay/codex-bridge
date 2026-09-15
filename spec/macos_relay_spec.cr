@@ -29,7 +29,7 @@ require "./spec_helper"
         stock_path = File.join(root, "stock.sock")
         Dir.mkdir_p(root)
 
-        resources = PlatformDiscovery.resource_candidates.first
+        resources = Platform.resource_candidates.first
         node = File.join(resources, "cua_node", "bin", "node")
         relay_source = File.expand_path("../src/codex_bridge/macos_relay/relay.mjs", __DIR__)
         process = Process.new(
@@ -68,7 +68,7 @@ require "./spec_helper"
 
         relay_path = nil.as(String?)
         300.times do
-          relay_path = PlatformDiscovery.relay_socket_candidates(state_home).first?
+          relay_path = Platform.relay_socket_candidates(state_home).first?
           break if relay_path
           sleep 10.milliseconds
         end
@@ -118,7 +118,7 @@ require "./spec_helper"
           end
         end
 
-        resources = PlatformDiscovery.resource_candidates.first
+        resources = Platform.resource_candidates.first
         node = File.join(resources, "cua_node", "bin", "node")
         relay_source = File.expand_path("../src/codex_bridge/macos_relay/relay.mjs", __DIR__)
         process = Process.new(
@@ -135,7 +135,7 @@ require "./spec_helper"
 
         relay_path = nil.as(String?)
         200.times do
-          relay_path = PlatformDiscovery.relay_socket_candidates(state_home).first?
+          relay_path = Platform.relay_socket_candidates(state_home).first?
           break if relay_path
           sleep 10.milliseconds
         end

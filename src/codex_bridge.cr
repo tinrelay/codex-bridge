@@ -10,8 +10,8 @@ module CodexBridge
 end
 
 require "./codex_bridge/types"
+require "./codex_bridge/platform"
 require "./codex_bridge/state_store"
-require "./codex_bridge/platform_discovery"
 require "./codex_bridge/app_tools_transport"
 require "./codex_bridge/app_tools_endpoint"
 require "./codex_bridge/discovery"

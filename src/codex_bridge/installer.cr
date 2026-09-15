@@ -68,7 +68,7 @@ module CodexBridge
           raise InstallError.new(detail.empty? ? "mcp_install_failed" : detail)
         end
         if AppToolsNative.relay_generation?(
-             PlatformDiscovery.relay_socket_candidates(state_home),
+             Platform.relay_socket_candidates(state_home),
              RELAY_ID
            )
           :ready
@@ -84,7 +84,7 @@ module CodexBridge
       private def self.resolve_runtimes(codex_path, node_path, codex_resources)
         resources = codex_resources
         resources ||= File.dirname(codex_path) if codex_path
-        resources ||= PlatformDiscovery.resource_candidates.find do |candidate|
+        resources ||= Platform.resource_candidates.find do |candidate|
           File::Info.executable?(File.join(candidate, "codex"))
         end
         codex_path ||= File.join(resources, "codex") if resources

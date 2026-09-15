@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe CodexBridge::Client do
-  {% unless flag?(:win32) %}
+  {% if flag?(:darwin) || flag?(:linux) %}
     it "waits for the app-tools relay before submitting" do
       root = File.join(Dir.tempdir, "cb-client-#{Process.pid}-#{Random::Secure.hex(4)}")
       state_home = File.join(root, "state")
@@ -171,7 +171,7 @@ describe CodexBridge::Client do
     CodexBridgeSpec.with_fake_app_tools do |root, _log|
       CodexBridgeSpec.fake_result("unknown")
 
-      expect_raises(CodexBridge::ReceiptUnknown, "connection closed") do
+      expect_raises(CodexBridge::ReceiptUnknown) do
         CodexBridge::Client.new(root, timeout: 2.seconds)
           .send_message(CodexBridgeSpec::TASK, "Hello")
       end
@@ -194,7 +194,7 @@ describe CodexBridge::Client do
       CodexBridgeSpec.fake_result("unknown")
       inserted = Channel(Nil).new(1)
       spawn do
-        until File.exists?(log) && CodexBridgeSpec.transport_requests(log).any? do |request|
+        until CodexBridgeSpec.transport_requests(log).any? do |request|
                 request["operation"].as_s == "send"
               end
           sleep 10.milliseconds

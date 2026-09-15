@@ -49,9 +49,7 @@ module CodexBridge
       path = File.join(@state_home, "state.db")
       milliseconds = timeout.total_milliseconds.clamp(0, Int32::MAX).to_i
       DB.open("sqlite3://#{URI.encode_path(path)}?busy_timeout=#{milliseconds}") do |database|
-        {% unless flag?(:win32) %}
-          File.chmod(path, 0o600)
-        {% end %}
+        Platform.restrict_private_file(path)
         database.exec(<<-SQL)
           CREATE TABLE IF NOT EXISTS kv (
             key TEXT PRIMARY KEY,

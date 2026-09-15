@@ -3,9 +3,17 @@ require "file_utils"
 
 require "../src/codex_bridge"
 
+{% if flag?(:win32) %}
+  require "./support/windows_app_tools_server"
+{% end %}
+
 module CodexBridgeSpec
   TASK   = "11111111-2222-3333-4444-555555555555"
   SOURCE = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+  {% if flag?(:win32) %}
+    @@windows_server : WindowsAppToolsServer?
+  {% end %}
 
   def self.with_fake_app_tools(&)
     root = File.join(Dir.tempdir, "cb-#{Process.pid}-#{Random::Secure.hex(4)}")
@@ -14,7 +22,9 @@ module CodexBridgeSpec
     log = File.join(root, "transport.jsonl")
     pipe = "/fake/app-tools.sock"
     server = nil.as(IO?)
-    windows_server = nil.as(Process?)
+    {% if flag?(:win32) %}
+      windows_server = nil.as(WindowsAppToolsServer?)
+    {% end %}
     result_file = File.join(root, "result")
     File.write(result_file, "success")
     {% if flag?(:linux) || flag?(:darwin) %}
@@ -24,55 +34,13 @@ module CodexBridgeSpec
       File.write(node, "#!/bin/sh\nexit 97\n")
       File.chmod(node, 0o700)
     {% elsif flag?(:win32) %}
-      name = "codex-bridge-spec-#{Process.pid}-#{Random::Secure.hex(4)}"
+      name = "codex-browser-use-spec-#{Process.pid}-#{Random::Secure.hex(4)}"
       pipe = "\\\\.\\pipe\\#{name}"
-      script = File.expand_path("support/windows_app_tools_server.ps1", __DIR__)
-      ready = File.join(root, "ready")
       File.write(node, "metadata only")
-      windows_server = Process.new(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          script,
-          name,
-          log,
-          result_file,
-          ready,
-        ],
-        output: Process::Redirect::Close,
-        error: Process::Redirect::Inherit
-      )
-      200.times do
-        break if File.exists?(ready)
-        sleep 10.milliseconds
-      end
-      raise "fake app-tools pipe did not start" unless File.exists?(ready)
+      windows_server = WindowsAppToolsServer.new(name)
+      @@windows_server = windows_server
     {% else %}
-      File.write(node, <<-'RUBY')
-        #!/usr/bin/env ruby
-        require "json"
-        input = JSON.parse(STDIN.read)
-        File.open(ENV.fetch("CODEX_BRIDGE_SPEC_LOG"), "a") { |file| file.puts(input.to_json) }
-        if input.fetch("operation") == "discover"
-          puts({path: input.fetch("candidates").first}.to_json)
-        else
-          case ENV["CODEX_BRIDGE_SPEC_RESULT"]
-          when "rejected"
-            puts({error: "rejected", message: "native rejection"}.to_json)
-          when "unknown"
-            puts({error: "receipt_unknown", message: "connection closed"}.to_json)
-          when "malformed"
-            puts "not json"
-          else
-            puts({path: input.fetch("candidates").first, sent: true}.to_json)
-          end
-        end
-        RUBY
-      File.chmod(node, 0o700)
+      {% raise "codex-bridge specs do not support this platform" %}
     {% end %}
     previous_node = ENV["CODEX_MCP_NODE_PATH"]?
     previous_pipe = ENV["CODEX_APP_TOOLS_PIPE_PATH"]?
@@ -87,8 +55,10 @@ module CodexBridgeSpec
     yield root, log
   ensure
     server.try(&.close)
-    windows_server.try(&.terminate)
-    windows_server.try(&.wait)
+    {% if flag?(:win32) %}
+      windows_server.try(&.close)
+      @@windows_server = nil
+    {% end %}
     restore_env("CODEX_MCP_NODE_PATH", previous_node)
     restore_env("CODEX_APP_TOOLS_PIPE_PATH", previous_pipe)
     restore_env("CODEX_BRIDGE_SPEC_LOG", previous_log)
@@ -98,10 +68,14 @@ module CodexBridgeSpec
   end
 
   def self.fake_result(value)
-    ENV["CODEX_BRIDGE_SPEC_RESULT"] = value
-    if path = ENV["CODEX_BRIDGE_SPEC_RESULT_FILE"]?
-      File.write(path, value)
-    end
+    {% if flag?(:win32) %}
+      @@windows_server.not_nil!.result = value
+    {% else %}
+      ENV["CODEX_BRIDGE_SPEC_RESULT"] = value
+      if path = ENV["CODEX_BRIDGE_SPEC_RESULT_FILE"]?
+        File.write(path, value)
+      end
+    {% end %}
   end
 
   def self.restore_env(key, value)
@@ -113,7 +87,12 @@ module CodexBridgeSpec
   end
 
   def self.transport_requests(log)
-    File.read_lines(log).map { |line| JSON.parse(line) }
+    {% if flag?(:win32) %}
+      @@windows_server.not_nil!.requests
+    {% else %}
+      return [] of JSON::Any unless File.exists?(log)
+      File.read_lines(log).map { |line| JSON.parse(line) }
+    {% end %}
   end
 
   {% if flag?(:darwin) %}

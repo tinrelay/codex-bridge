@@ -98,9 +98,9 @@ The Linux default derives the bundled runtime from `/usr/lib/chatgpt/resources` 
 per-user app-tools sockets under the system temporary directory. Explicit arguments and the Codex
 environment variables remain available for nonstandard installations.
 
-The Windows default resolves the current `OpenAI.Codex` AppX package, derives its bundled runtime,
-and scans the current user's `codex-browser-use-*` named pipes. Package versions and pipe names are
-discovered at runtime rather than embedded in the bridge.
+The Windows default scans the current user's `codex-browser-use-*` named pipes directly through
+the Windows API. Windows runtime metadata is reported only when supplied explicitly or through the
+Codex environment variables; it is not needed for native delivery.
 
 ## Stock Codex boundary
 

@@ -123,7 +123,7 @@ module CodexBridge
       raise AppToolsRejected.new("request too large") if payload.size > MAX_FRAME
 
       submitted = false
-      open_endpoint(path, timeout) do |io|
+      Platform.open_endpoint(path, timeout) do |io|
         header = Bytes.new(4)
         IO::ByteFormat::LittleEndian.encode(payload.size.to_u32, header)
         submitted = mutating
@@ -159,32 +159,5 @@ module CodexBridge
       end
       raise AppToolsRejected.new(message)
     end
-
-    private def self.open_endpoint(path, timeout, &)
-      {% if flag?(:win32) %}
-        OverlappedPipe.open(path) do |io|
-          io.read_timeout = timeout
-          io.write_timeout = timeout
-          yield io
-        end
-      {% else %}
-        socket = UNIXSocket.new(path)
-        begin
-          socket.read_timeout = timeout
-          socket.write_timeout = timeout
-          yield socket
-        ensure
-          socket.close
-        end
-      {% end %}
-    end
-
-    {% if flag?(:win32) %}
-      private class OverlappedPipe < File
-        def self.open(path, &)
-          open_internal(path, "r+", blocking: false) { |io| yield io }
-        end
-      end
-    {% end %}
   end
 end

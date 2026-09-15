@@ -59,7 +59,7 @@ module CodexBridge
         return remember(state, path, cache)
       end
 
-      path = probe(PlatformDiscovery.relay_socket_candidates(state_home), checked, deadline)
+      path = probe(Platform.relay_socket_candidates(state_home), checked, deadline)
       return remember(state, path, cache) if path
       if cache && (cached = state.get(CACHE_KEY))
         path = probe([cached], checked, deadline)
@@ -111,7 +111,7 @@ module CodexBridge
     private def self.bundled_node(explicit_node, explicit_resources)
       return {explicit_node, resources_for(explicit_node, explicit_resources)} if explicit_node
       if explicit_resources
-        node = File.join(explicit_resources, "cua_node", "bin", node_name)
+        node = File.join(explicit_resources, "cua_node", "bin", Platform.node_name)
         return {node, explicit_resources} if File.exists?(node)
         return {nil, explicit_resources}
       end
@@ -124,31 +124,23 @@ module CodexBridge
         paths << {configured, resources_for(configured, nil)}
       end
       if resources = ENV["CODEX_ELECTRON_RESOURCES_PATH"]?
-        paths << {File.join(resources, "cua_node", "bin", node_name), resources}
+        paths << {File.join(resources, "cua_node", "bin", Platform.node_name), resources}
       end
-      PlatformDiscovery.resource_candidates.each do |resources|
-        paths << {File.join(resources, "cua_node", "bin", node_name), resources}
+      Platform.resource_candidates.each do |resources|
+        paths << {File.join(resources, "cua_node", "bin", Platform.node_name), resources}
       end
       paths.find { |path, _| File.exists?(path) } || {nil, nil}
     end
 
     private def self.resources_for(node_path, configured_resources)
       return configured_resources if configured_resources
-      suffix = File.join("cua_node", "bin", node_name)
+      suffix = File.join("cua_node", "bin", Platform.node_name)
       return unless node_path.ends_with?(suffix)
       node_path[0, node_path.bytesize - suffix.bytesize].rstrip(File::SEPARATOR)
     end
 
-    private def self.node_name
-      {% if flag?(:win32) %}
-        "node.exe"
-      {% else %}
-        "node"
-      {% end %}
-    end
-
     private def self.default_candidates
-      PlatformDiscovery.socket_candidates
+      Platform.socket_candidates
     end
   end
 end

@@ -2,13 +2,13 @@ require "socket"
 
 require "./spec_helper"
 
-{% unless flag?(:win32) %}
+{% if flag?(:darwin) || flag?(:linux) %}
   module CodexBridge
     describe AppToolsTransport do
       it "uses the native transport for the Codex-managed relay on macOS" do
         root = File.join(Dir.tempdir, "cb-relay-#{Process.pid}-#{Random::Secure.hex(4)}")
         Dir.mkdir_p(root)
-        relay = File.join(root, "#{PlatformDiscovery::RELAY_SOCKET_PREFIX}123.sock")
+        relay = File.join(root, "#{Platform::RELAY_SOCKET_PREFIX}123.sock")
         server = UNIXServer.new(relay)
         handled = Channel(String?).new
 
