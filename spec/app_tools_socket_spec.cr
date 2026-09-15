@@ -92,3 +92,29 @@ require "./spec_helper"
     end
   end
 {% end %}
+
+module CodexBridge
+  private class ForbiddenEndpointCandidates
+    include Enumerable(String)
+
+    def each(& : String ->)
+      raise "lower-priority endpoint candidates were enumerated"
+    end
+  end
+
+  describe AppToolsEndpoint do
+    it "uses the configured endpoint before enumerating lower-priority candidates" do
+      CodexBridgeSpec.with_fake_app_tools do |root, log|
+        endpoint = AppToolsEndpoint.discover_delivery(
+          File.join(root, "state"),
+          ForbiddenEndpointCandidates.new,
+          cache: false,
+          deadline: Time.instant + 2.seconds
+        )
+
+        endpoint.should_not be_nil
+        CodexBridgeSpec.transport_requests(log).last["operation"].as_s.should eq("discover")
+      end
+    end
+  end
+end

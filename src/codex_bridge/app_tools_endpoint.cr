@@ -53,30 +53,41 @@ module CodexBridge
       deadline,
     ) : String?
       state = StateStore.new(state_home)
-      paths = [] of String
+      checked = [] of String
       if socket_file
-        paths << socket_file
-      else
-        paths.concat(PlatformDiscovery.relay_socket_candidates(state_home))
-        if cache && (cached = state.get(CACHE_KEY))
-          paths << cached
-        end
-      end
-      unless socket_file
-        if configured = ENV["CODEX_APP_TOOLS_PIPE_PATH"]?
-          paths << configured
-        end
-        if candidates
-          paths.concat(candidates)
-        else
-          paths.concat(default_candidates)
-        end
+        path = probe([socket_file], checked, deadline)
+        return remember(state, path, cache)
       end
 
-      path = AppToolsTransport.discover(paths.uniq, deadline)
+      path = probe(PlatformDiscovery.relay_socket_candidates(state_home), checked, deadline)
+      return remember(state, path, cache) if path
+      if cache && (cached = state.get(CACHE_KEY))
+        path = probe([cached], checked, deadline)
+        return remember(state, path, cache) if path
+      end
+      if configured = ENV["CODEX_APP_TOOLS_PIPE_PATH"]?
+        path = probe([configured], checked, deadline)
+        return remember(state, path, cache) if path
+      end
+
+      path = probe(candidates || default_candidates, checked, deadline)
+      remember(state, path, cache)
+    end
+
+    private def self.remember(state, path, cache)
       return unless path
       state.put(CACHE_KEY, path) if cache
       path
+    end
+
+    private def self.probe(paths, checked, deadline)
+      fresh = paths.reject do |path|
+        duplicate = checked.includes?(path)
+        checked << path unless duplicate
+        duplicate
+      end
+      return if fresh.empty?
+      AppToolsTransport.discover(fresh, deadline)
     end
 
     def initialize(@connection)
