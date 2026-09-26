@@ -2,6 +2,24 @@ require "./spec_helper"
 
 describe ".install" do
   {% if flag?(:darwin) %}
+    it "finds the Codex CLI in the current macOS app bundle" do
+      CodexBridgeSpec.with_fake_installer do |codex_home, state_home, codex, node, log|
+        resources = File.dirname(codex)
+        bundled_codex = File.join(resources, "codex-cli", "bin", "codex")
+        Dir.mkdir_p(File.dirname(bundled_codex))
+        File.rename(codex, bundled_codex)
+
+        CodexBridge.install(
+          codex_home,
+          state_home: state_home,
+          codex_resources: resources
+        ).should eq(:codex_restart_required)
+
+        File.read(log).should contain("#{codex_home}|mcp add codex_bridge_relay")
+        File.read(log).should contain("-- #{node} ")
+      end
+    end
+
     it "materializes and registers the macOS relay MCP" do
       CodexBridgeSpec.with_fake_installer do |codex_home, state_home, codex, node, log|
         result = CodexBridge.install(

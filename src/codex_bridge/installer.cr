@@ -84,10 +84,8 @@ module CodexBridge
       private def self.resolve_runtimes(codex_path, node_path, codex_resources)
         resources = codex_resources
         resources ||= File.dirname(codex_path) if codex_path
-        resources ||= Platform.resource_candidates.find do |candidate|
-          File::Info.executable?(File.join(candidate, "codex"))
-        end
-        codex_path ||= File.join(resources, "codex") if resources
+        resources ||= Platform.resource_candidates.find { |candidate| bundled_codex(candidate) }
+        codex_path ||= bundled_codex(resources) if resources
         node_path ||= File.join(resources, "cua_node", "bin", "node") if resources
         unless codex_path && File::Info.executable?(codex_path)
           raise InstallError.new("codex_not_found")
@@ -96,6 +94,12 @@ module CodexBridge
           raise InstallError.new("codex_node_not_found")
         end
         {codex_path, node_path}
+      end
+
+      private def self.bundled_codex(resources : String) : String?
+        [File.join(resources, "codex-cli", "bin", "codex"), File.join(resources, "codex")].find do |path|
+          File::Info.executable?(path)
+        end
       end
 
       private def self.write_relay(path)
