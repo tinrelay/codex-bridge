@@ -268,7 +268,7 @@ function answerMcp(message) {
     result = {
       protocolVersion: message.params?.protocolVersion || "2024-11-05",
       capabilities: {tools: {}},
-      serverInfo: {name: "codex-bridge-relay", version: "0.3.0"}
+      serverInfo: {name: "codex-bridge-relay", version: "0.3.1"}
     };
   } else if (message.method === "tools/list") {
     result = {tools: []};

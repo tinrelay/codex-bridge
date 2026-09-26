@@ -30,6 +30,7 @@ describe CodexBridge::Client do
               }
             else
               request["method"].as_s.should eq("tools/call")
+              request["params"]["callerSource"].as_s.should eq("codex")
               result = {
                 success:      true,
                 contentItems: [{type: "inputText", text: {threadId: CodexBridgeSpec::TASK}.to_json}],

@@ -6,7 +6,7 @@ require "sqlite3"
 require "uuid"
 
 module CodexBridge
-  VERSION = "0.3.0"
+  VERSION = "0.3.1"
 end
 
 require "./codex_bridge/types"
